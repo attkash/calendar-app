@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Calendar</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Georgia', serif; background: #fff; }
+
+    .page {
+      width: 210mm;
+      min-height: 297mm;
+      padding: 15mm;
+      page-break-after: always;
+      display: flex;
+      flex-direction: column;
+    }
+    .page:last-child { page-break-after: auto; }
+
+    .page h1 {
+      font-size: 28px;
+      font-weight: 400;
+      color: #2c3e50;
+      margin-bottom: 10mm;
+      text-align: center;
+      letter-spacing: 0.05em;
+    }
+
+    .photo {
+      display: block;
+      width: 100%;
+      max-width: 100%;
+      height: auto;
+      max-height: 120mm;
+      min-height: 70mm;
+      object-fit: cover;
+      margin-bottom: 10mm;
+      border-radius: 2px;
+    }
+
+    .photo-placeholder {
+      width: 100%;
+      max-height: 120mm;
+      min-height: 70mm;
+      margin-bottom: 10mm;
+      border-radius: 2px;
+      background: #e8eaed;
+      border: 1px dashed #c5c9d0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #888;
+      font-size: 16px;
+      box-sizing: border-box;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 2px;
+      flex: 1;
+    }
+
+    .cell {
+      min-height: 18mm;
+      border: 1px solid #e0e0e0;
+      padding: 3px;
+      display: flex;
+      flex-direction: column;
+      font-size: 10px;
+    }
+
+    .cell-header {
+      min-height: auto;
+      font-weight: 600;
+      color: #2c3e50;
+      text-align: center;
+      background: #f8f9fa;
+    }
+
+    .date {
+      font-weight: 600;
+      color: #34495e;
+      margin-bottom: 2px;
+      min-height: 1.2em;
+    }
+
+    .event {
+      flex: 1;
+      display: block;
+      font-size: 9px;
+      color: #555;
+      line-height: 1.35;
+      word-break: break-word;
+      white-space: normal;
+    }
+
+    /* Size 5 = full cell digit height — shrink photo/margins so photo + grid fit one A4 page */
+    .page--date-size-5 .photo,
+    .page--date-size-5 .photo-placeholder {
+      max-height: 68mm;
+      min-height: 36mm;
+      margin-bottom: 4mm;
+    }
+    .page--date-size-5 > h1 {
+      margin-bottom: 4mm;
+      font-size: 22px;
+    }
+    .page--date-size-5 .grid {
+      gap: 1px;
+    }
+    .page--date-size-5 .cell:not(.cell-header) {
+      padding: 1px 2px;
+      min-height: 18mm;
+      overflow: hidden;
+    }
+    .page--date-size-5 .date {
+      line-height: 0.95;
+      margin-bottom: 1px;
+    }
+    .page--date-size-5 .event {
+      font-size: 7px;
+      line-height: 1.2;
+    }
+
+    @media print {
+      .page { page-break-after: always; }
+      .page:last-child { page-break-after: auto; }
+    }
+  </style>
+</head>
+<body>
+  {{content}}
+</body>
+</html>

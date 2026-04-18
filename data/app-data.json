@@ -1,0 +1,32 @@
+{
+  "users": [
+    {
+      "id": "651e847f-4545-490b-b41b-a16153fde182",
+      "username": "123456",
+      "usernameLower": "123456",
+      "passwordHash": "$2b$10$aOwQ9w2MMtngTyeDLPV9nuq28IMdmgFfe5qh7lbEXkCKrVd/9dQB2",
+      "createdAt": "2026-04-15T02:10:43.790Z"
+    }
+  ],
+  "savedCalendars": [
+    {
+      "id": "c1a94355-460f-4968-a983-d2fea7e94cb1",
+      "userId": "651e847f-4545-490b-b41b-a16153fde182",
+      "name": "Мой calendar",
+      "year": 2026,
+      "startMonth": 1,
+      "weekStart": "sunday",
+      "yearFont": "Arial",
+      "monthFont": "Arial",
+      "weekDaysFont": "Arial",
+      "datesFont": "Arial",
+      "datesFontSize": "3",
+      "archiveFolder": "",
+      "archiveReplaceAll": true,
+      "archiveCoverFrom13": false,
+      "events": [],
+      "updatedAt": "2026-04-16T01:44:27.568Z",
+      "createdAt": "2026-04-16T01:44:01.870Z"
+    }
+  ]
+}
