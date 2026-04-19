@@ -60,7 +60,6 @@ export function ApplicationForm() {
   const [monthPhotos, setMonthPhotos] = useState<MonthPhoto[]>(
     MONTHS.map(month => ({ month, file: null, preview: null }))
   );
-  const [coverPhoto, setCoverPhoto] = useState<{ file: File | null; preview: string | null }>({ file: null, preview: null });
   const [dateEvents, setDateEvents] = useState<DateEvent[]>([
     { id: '1', date: '', reason: '' }
   ]);
@@ -75,7 +74,6 @@ export function ApplicationForm() {
   const [archiveFolder, setArchiveFolder] = useState('');
   const [loadingArchive, setLoadingArchive] = useState(false);
   const [archiveReplaceAll, setArchiveReplaceAll] = useState(true);
-  const [archiveCoverFrom13, setArchiveCoverFrom13] = useState(false);
   const [pictureSubfolders, setPictureSubfolders] = useState<string[]>([]);
   const [loadingFolders, setLoadingFolders] = useState(false);
   const [saveName, setSaveName] = useState('My calendar');
@@ -119,7 +117,6 @@ export function ApplicationForm() {
     setDatesFontSize(cal.datesFontSize);
     setArchiveFolder(cal.archiveFolder || '');
     setArchiveReplaceAll(cal.archiveReplaceAll);
-    setArchiveCoverFrom13(cal.archiveCoverFrom13);
     setSaveName(cal.name || 'My calendar');
     const evs =
       cal.events && cal.events.length > 0
@@ -186,13 +183,6 @@ export function ApplicationForm() {
     }
   };
 
-  const handleCoverChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      setCoverPhoto({ file, preview: URL.createObjectURL(file) });
-    }
-  };
-
   const removePhoto = (monthIndex: number) => {
     setMonthPhotos(prev => {
       const updated = [...prev];
@@ -202,11 +192,6 @@ export function ApplicationForm() {
       updated[monthIndex] = { ...updated[monthIndex], file: null, preview: null };
       return updated;
     });
-  };
-
-  const removeCover = () => {
-    if (coverPhoto.preview) URL.revokeObjectURL(coverPhoto.preview);
-    setCoverPhoto({ file: null, preview: null });
   };
 
   const fetchArchiveImage = async (fileMeta: { name: string; path: string }) => {
@@ -265,17 +250,6 @@ export function ApplicationForm() {
       }
 
       setMonthPhotos(base);
-
-      if (archiveCoverFrom13 && files.length >= 13) {
-        const coverMeta = files[12];
-        const loaded = await fetchArchiveImage(coverMeta);
-        if (loaded) {
-          setCoverPhoto((prev) => {
-            if (prev.preview) URL.revokeObjectURL(prev.preview);
-            return { file: loaded.file, preview: loaded.preview };
-          });
-        }
-      }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load from Pictures');
     } finally {
@@ -316,7 +290,6 @@ export function ApplicationForm() {
     datesFontSize,
     archiveFolder,
     archiveReplaceAll,
-    archiveCoverFrom13,
     events: dateEvents
       .filter((e) => e.date && e.reason)
       .map((e) => ({ date: e.date, occasion: e.reason })),
@@ -387,11 +360,10 @@ export function ApplicationForm() {
       formData.append('datesFont', datesFont);
       formData.append('datesFontSize', datesFontSize);
 
-      // Images: preserve order - images_0..11 = Jan-Dec, images_12 = Cover
+      // Images: images_0..11 = January–December (cover page has title only, no photo)
       monthPhotos.forEach((mp, i) => {
         if (mp.file) formData.append(`images_${i}`, mp.file);
       });
-      if (coverPhoto.file) formData.append('images_12', coverPhoto.file);
 
       const res = await fetch(`${API_URL}/generate`, {
         method: 'POST',
@@ -751,15 +723,6 @@ export function ApplicationForm() {
                     />
                     Replace all 12 month slots (uncheck to only fill empty months)
                   </label>
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={archiveCoverFrom13}
-                      onChange={(e) => setArchiveCoverFrom13(e.target.checked)}
-                      className="rounded border-slate-500 bg-[#152238]"
-                    />
-                    Use 13th file as cover (when there are at least 13 images)
-                  </label>
                 </div>
               </div>
 
@@ -804,26 +767,6 @@ export function ApplicationForm() {
                     </div>
                   </div>
                 ))}
-              </div>
-
-              <div className="mt-6 space-y-2">
-                <Label className="text-base">Cover Photo</Label>
-                <div className="border-2 border-dashed border-slate-500 rounded-lg p-4 max-w-[200px] hover:border-slate-400 transition-colors min-h-[140px]">
-                  {coverPhoto.preview ? (
-                    <div className="relative">
-                      <img src={coverPhoto.preview} alt="Cover preview" className="w-full h-36 object-cover rounded" />
-                      <Button type="button" variant="destructive" size="sm" className="absolute top-1 right-1" onClick={removeCover}>
-                        <X className="size-4" />
-                      </Button>
-                    </div>
-                  ) : (
-                    <label htmlFor="cover-photo" className="flex flex-col items-center justify-center h-36 cursor-pointer">
-                      <Upload className="size-10 text-slate-500 mb-2" />
-                      <span className="text-base text-slate-400">Upload Cover</span>
-                      <input id="cover-photo" type="file" accept="image/*" className="hidden" onChange={handleCoverChange} />
-                    </label>
-                  )}
-                </div>
               </div>
             </CardContent>
           </Card>

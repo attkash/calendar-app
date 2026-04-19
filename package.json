@@ -10,7 +10,8 @@
     "web": "npm run dev --prefix client",
     "dev": "concurrently -n srv,web -c cyan,magenta \"npm run server\" \"npm run web\"",
     "build": "cd client && npm run build",
-    "preview": "npm run build && node server.js"
+    "preview": "npm run build && node server.js",
+    "postinstall": "npx puppeteer browsers install chrome"
   },
   "keywords": [],
   "author": "",

@@ -16,7 +16,6 @@ export interface SavedCalendarFull {
   datesFontSize: string;
   archiveFolder: string;
   archiveReplaceAll: boolean;
-  archiveCoverFrom13: boolean;
   events: SavedCalendarEvent[];
   updatedAt: string;
   createdAt: string;

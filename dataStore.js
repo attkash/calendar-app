@@ -104,7 +104,6 @@ function upsertSavedCalendar(userId, payload) {
     datesFontSize: String(payload.datesFontSize || "3"),
     archiveFolder: typeof payload.archiveFolder === "string" ? payload.archiveFolder : "",
     archiveReplaceAll: Boolean(payload.archiveReplaceAll),
-    archiveCoverFrom13: Boolean(payload.archiveCoverFrom13),
     events: normalizeEvents(payload.events),
     updatedAt: now,
     createdAt:

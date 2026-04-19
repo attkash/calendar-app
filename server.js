@@ -46,7 +46,6 @@ function publicCalendar(c) {
     datesFontSize: c.datesFontSize,
     archiveFolder: c.archiveFolder,
     archiveReplaceAll: c.archiveReplaceAll,
-    archiveCoverFrom13: c.archiveCoverFrom13,
     events: c.events,
     updatedAt: c.updatedAt,
     createdAt: c.createdAt,
@@ -356,7 +355,7 @@ app.post("/generate", upload.any(), async (req, res) => {
     const dateNumberMm = DATE_NUMBER_FONT_MM[dateNumberSize];
     const rawFiles = req.files || [];
     const images = [];
-    for (let i = 0; i < 13; i++) {
+    for (let i = 0; i < 12; i++) {
       const f = rawFiles.find((x) => x.fieldname === `images_${i}`);
       images[i] = f || null;
     }
@@ -389,7 +388,6 @@ app.post("/generate", upload.any(), async (req, res) => {
     let monthsHtml = `
       <div class="page">
         <h1 style="font-family: ${yearFont}, serif">${coverTitle}</h1>
-        ${getPhotoMarkup(images, 12)}
       </div>
     `;
 
@@ -449,7 +447,10 @@ app.post("/generate", upload.any(), async (req, res) => {
 
     const finalHtml = template.replace("{{content}}", monthsHtml);
 
-    const browser = await puppeteer.launch();
+    const browser = await puppeteer.launch({
+      args: ["--no-sandbox", "--disable-setuid-sandbox"]
+    });
+    
     const page = await browser.newPage();
 
     await page.setContent(finalHtml, { waitUntil: "load", timeout: 30000 });
