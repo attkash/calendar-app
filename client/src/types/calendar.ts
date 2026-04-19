@@ -3,6 +3,9 @@ export interface SavedCalendarEvent {
   occasion: string;
 }
 
+/** One A4 portrait page per month vs photo + grid on two A4 landscape pages */
+export type PdfLayoutMode = 'portrait-single' | 'landscape-spread';
+
 export interface SavedCalendarFull {
   id: string;
   name: string;
@@ -16,6 +19,7 @@ export interface SavedCalendarFull {
   datesFontSize: string;
   archiveFolder: string;
   archiveReplaceAll: boolean;
+  layoutMode: PdfLayoutMode;
   events: SavedCalendarEvent[];
   updatedAt: string;
   createdAt: string;

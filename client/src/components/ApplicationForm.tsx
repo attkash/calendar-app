@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/
 import { RadioGroup, RadioGroupItem } from './ui/radio-group';
 import { Upload, X, Plus, FolderOpen, RefreshCw, LayoutDashboard, Save } from 'lucide-react';
 import { useAuth, authHeaders } from '../context/AuthContext';
-import type { SavedCalendarFull } from '../types/calendar';
+import type { PdfLayoutMode, SavedCalendarFull } from '../types/calendar';
 
 interface MonthPhoto {
   month: string;
@@ -54,7 +54,45 @@ const FONT_OPTIONS = [
 
 const API_URL = import.meta.env.DEV ? '' : '';
 
+function LayoutIconPortrait() {
+  return (
+    <svg viewBox="0 0 40 56" className="w-10 h-14 shrink-0 text-slate-400" aria-hidden>
+      <rect x="2" y="2" width="36" height="52" rx="2" fill="none" stroke="currentColor" strokeWidth="1.5" />
+      <rect x="6" y="6" width="28" height="14" rx="1" fill="currentColor" opacity="0.38" />
+      <g opacity="0.5" stroke="currentColor" strokeWidth="0.9">
+        {[0, 1, 2, 3, 4].map((i) => (
+          <line key={i} x1="6" y1={24 + i * 6.5} x2="34" y2={24 + i * 6.5} />
+        ))}
+      </g>
+    </svg>
+  );
+}
+
+/** Two A4 landscape pages stacked: photo page on top, calendar grid below (like the old icon turned 90°). */
+function LayoutIconLandscapeSpread() {
+  return (
+    <svg viewBox="0 0 40 56" className="w-10 h-14 shrink-0 text-slate-400" aria-hidden>
+      <rect x="2" y="4" width="36" height="15" rx="2" fill="none" stroke="currentColor" strokeWidth="1.2" />
+      <rect x="5" y="7" width="30" height="8" rx="1" fill="currentColor" opacity="0.35" />
+      <rect x="2" y="23" width="36" height="15" rx="2" fill="none" stroke="currentColor" strokeWidth="1.2" />
+      <g opacity="0.5" stroke="currentColor" strokeWidth="0.85">
+        {[0, 1, 2, 3, 4].map((i) => (
+          <line key={i} x1="5" y1={27 + i * 2.4} x2="35" y2={27 + i * 2.4} />
+        ))}
+      </g>
+    </svg>
+  );
+}
+
+const MONTH_SLOT_COUNT = 12;
+
+function isImageFile(f: File) {
+  return f.type.startsWith('image/') || /\.(jpe?g|png|gif|webp|bmp)$/i.test(f.name);
+}
+
 export function ApplicationForm() {
+  const bulkFileInputRef = useRef<HTMLInputElement>(null);
+  const [bulkDragActive, setBulkDragActive] = useState(false);
   const [year, setYear] = useState('2026');
   const [startMonth, setStartMonth] = useState('1');
   const [monthPhotos, setMonthPhotos] = useState<MonthPhoto[]>(
@@ -69,6 +107,7 @@ export function ApplicationForm() {
   const [weekDaysFont, setWeekDaysFont] = useState('Arial');
   const [datesFont, setDatesFont] = useState('Arial');
   const [datesFontSize, setDatesFontSize] = useState('3');
+  const [layoutMode, setLayoutMode] = useState<PdfLayoutMode>('landscape-spread');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [archiveFolder, setArchiveFolder] = useState('');
@@ -117,6 +156,7 @@ export function ApplicationForm() {
     setDatesFontSize(cal.datesFontSize);
     setArchiveFolder(cal.archiveFolder || '');
     setArchiveReplaceAll(cal.archiveReplaceAll);
+    setLayoutMode(cal.layoutMode === 'portrait-single' ? 'portrait-single' : 'landscape-spread');
     setSaveName(cal.name || 'My calendar');
     const evs =
       cal.events && cal.events.length > 0
@@ -173,14 +213,41 @@ export function ApplicationForm() {
 
   const handleFileChange = (monthIndex: number, event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (file) {
+    if (file && isImageFile(file)) {
       const preview = URL.createObjectURL(file);
       setMonthPhotos(prev => {
         const updated = [...prev];
+        if (updated[monthIndex].preview) {
+          URL.revokeObjectURL(updated[monthIndex].preview!);
+        }
         updated[monthIndex] = { ...updated[monthIndex], file, preview };
         return updated;
       });
     }
+    event.target.value = '';
+  };
+
+  const assignBulkImageFiles = useCallback((files: File[]) => {
+    const images = files.filter(isImageFile).slice(0, MONTH_SLOT_COUNT);
+    if (images.length === 0) return;
+    setMonthPhotos((prev) => {
+      const next = [...prev];
+      for (let i = 0; i < images.length; i++) {
+        if (next[i].preview) URL.revokeObjectURL(next[i].preview!);
+        next[i] = {
+          ...next[i],
+          file: images[i],
+          preview: URL.createObjectURL(images[i]),
+        };
+      }
+      return next;
+    });
+  }, []);
+
+  const handleBulkFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const list = e.target.files;
+    if (list?.length) assignBulkImageFiles(Array.from(list));
+    e.target.value = '';
   };
 
   const removePhoto = (monthIndex: number) => {
@@ -290,6 +357,7 @@ export function ApplicationForm() {
     datesFontSize,
     archiveFolder,
     archiveReplaceAll,
+    layoutMode,
     events: dateEvents
       .filter((e) => e.date && e.reason)
       .map((e) => ({ date: e.date, occasion: e.reason })),
@@ -359,6 +427,7 @@ export function ApplicationForm() {
       formData.append('weekDaysFont', weekDaysFont);
       formData.append('datesFont', datesFont);
       formData.append('datesFontSize', datesFontSize);
+      formData.append('layoutMode', layoutMode);
 
       // Images: images_0..11 = January–December (cover page has title only, no photo)
       monthPhotos.forEach((mp, i) => {
@@ -482,6 +551,65 @@ export function ApplicationForm() {
                       ? 'Update in account'
                       : 'Save to account'}
                 </Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="p-6 lg:p-8">
+            <CardHeader className="p-0 pb-4">
+              <CardTitle className="text-xl">PDF layout</CardTitle>
+              <CardDescription className="text-base">
+                How each month appears in the generated PDF. Icons are schematic only.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="p-0">
+              <div className="grid sm:grid-cols-2 gap-4">
+                <label
+                  className={`flex cursor-pointer gap-4 rounded-xl border-2 p-4 transition-colors ${
+                    layoutMode === 'portrait-single'
+                      ? 'border-blue-500 bg-blue-950/25 ring-1 ring-blue-500/40'
+                      : 'border-slate-600 hover:border-slate-500 bg-[#152238]/40'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="layoutMode"
+                    value="portrait-single"
+                    checked={layoutMode === 'portrait-single'}
+                    onChange={() => setLayoutMode('portrait-single')}
+                    className="sr-only"
+                  />
+                  <LayoutIconPortrait />
+                  <div className="min-w-0">
+                    <p className="font-semibold text-white">Portrait — one page</p>
+                    <p className="text-sm text-slate-400 mt-1">
+                      Photo and calendar grid on a single A4 <strong className="text-slate-300">portrait</strong> page per month.
+                    </p>
+                  </div>
+                </label>
+                <label
+                  className={`flex cursor-pointer gap-4 rounded-xl border-2 p-4 transition-colors ${
+                    layoutMode === 'landscape-spread'
+                      ? 'border-blue-500 bg-blue-950/25 ring-1 ring-blue-500/40'
+                      : 'border-slate-600 hover:border-slate-500 bg-[#152238]/40'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="layoutMode"
+                    value="landscape-spread"
+                    checked={layoutMode === 'landscape-spread'}
+                    onChange={() => setLayoutMode('landscape-spread')}
+                    className="sr-only"
+                  />
+                  <LayoutIconLandscapeSpread />
+                  <div className="min-w-0">
+                    <p className="font-semibold text-white">Landscape — two pages</p>
+                    <p className="text-sm text-slate-400 mt-1">
+                      Photo (with month title) on the first A4 <strong className="text-slate-300">landscape</strong> page; grid on the second — as now.
+                    </p>
+                  </div>
+                </label>
               </div>
             </CardContent>
           </Card>
@@ -651,8 +779,8 @@ export function ApplicationForm() {
             <CardHeader className="p-0 pb-4">
               <CardTitle className="text-xl">Monthly Photos</CardTitle>
               <CardDescription className="text-base">
-                Upload your own files below, <strong>or</strong> load images from the server <code className="text-sm bg-slate-700 text-slate-100 px-1 rounded">Pictures</code> folder.
-                January = first slot, February = second, … (same order no matter which month the PDF starts with).
+                Drag and drop or choose <strong>multiple images</strong> at once (January → December), <strong>or</strong> load from the server <code className="text-sm bg-slate-700 text-slate-100 px-1 rounded">Pictures</code> folder.
+                Same month order no matter which month the PDF starts with.
               </CardDescription>
             </CardHeader>
             <CardContent className="p-0 space-y-4">
@@ -726,40 +854,111 @@ export function ApplicationForm() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 gap-5">
+              <div className="space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-sm font-medium text-slate-200">
+                    {monthPhotos.filter((p) => p.file).length}/{MONTH_SLOT_COUNT} images added
+                  </p>
+                  <p className="text-xs text-slate-400 max-w-xl">
+                    First file → January, second → February, … (standard file picker; no folder picker required.)
+                  </p>
+                </div>
+                <input
+                  ref={bulkFileInputRef}
+                  type="file"
+                  multiple
+                  accept="image/*"
+                  className="hidden"
+                  aria-label="Choose multiple images for months January through December"
+                  onChange={handleBulkFileInputChange}
+                />
+                <div
+                  role="region"
+                  aria-label="Drop zone for multiple month images"
+                  className={`rounded-xl border-2 border-dashed px-6 py-10 text-center transition-colors ${
+                    bulkDragActive
+                      ? 'border-blue-400 bg-[#152238]/90'
+                      : 'border-slate-500 bg-[#152238]/40 hover:border-slate-400'
+                  }`}
+                  onDragEnter={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setBulkDragActive(true);
+                  }}
+                  onDragLeave={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (e.currentTarget === e.target) setBulkDragActive(false);
+                  }}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setBulkDragActive(false);
+                    if (e.dataTransfer.files?.length) {
+                      assignBulkImageFiles(Array.from(e.dataTransfer.files));
+                    }
+                  }}
+                >
+                  <Upload className="size-12 mx-auto text-slate-400 mb-3" aria-hidden />
+                  <p className="text-slate-200 font-medium mb-1">Drag and drop images here</p>
+                  <p className="text-sm text-slate-400 mb-4">or choose several files at once (up to 12).</p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="border-slate-500"
+                    onClick={() => bulkFileInputRef.current?.click()}
+                  >
+                    Choose images…
+                  </Button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
                 {monthPhotos.map((monthPhoto, index) => (
                   <div key={monthPhoto.month} className="space-y-2">
-                    <Label className="text-base">{monthPhoto.month}</Label>
-                    <div className="border-2 border-dashed border-slate-500 rounded-lg p-4 hover:border-slate-400 transition-colors min-h-[140px]">
+                    <Label className="text-sm text-slate-300 block truncate" title={monthPhoto.month}>
+                      {index + 1}. {monthPhoto.month}
+                    </Label>
+                    <div className="relative aspect-square rounded-lg border border-slate-600 bg-[#0f1a2e] overflow-hidden">
                       {monthPhoto.preview ? (
-                        <div className="relative">
+                        <>
                           <img
                             src={monthPhoto.preview}
                             alt={`${monthPhoto.month} preview`}
-                            className="w-full h-36 object-cover rounded"
+                            className="w-full h-full object-cover"
                           />
+                          <label className="absolute bottom-2 left-2 right-10 cursor-pointer rounded bg-slate-900/90 px-2 py-1 text-center text-xs text-slate-200 border border-slate-600 hover:bg-slate-800">
+                            Replace
+                            <input
+                              type="file"
+                              accept="image/*"
+                              className="sr-only"
+                              onChange={(e) => handleFileChange(index, e)}
+                            />
+                          </label>
                           <Button
                             type="button"
                             variant="destructive"
-                            size="sm"
-                            className="absolute top-1 right-1"
+                            size="icon"
+                            className="absolute top-1 right-1 size-8 z-10"
                             onClick={() => removePhoto(index)}
+                            title="Remove"
                           >
                             <X className="size-4" />
                           </Button>
-                        </div>
+                        </>
                       ) : (
-                        <label
-                          htmlFor={`photo-${monthPhoto.month}`}
-                          className="flex flex-col items-center justify-center h-36 cursor-pointer"
-                        >
-                          <Upload className="size-10 text-slate-500 mb-2" />
-                          <span className="text-base text-slate-400">Upload Photo</span>
+                        <label className="flex flex-col items-center justify-center h-full min-h-[120px] cursor-pointer p-2">
+                          <Upload className="size-8 text-slate-500 mb-1" />
+                          <span className="text-xs text-slate-500 text-center">Add</span>
                           <input
-                            id={`photo-${monthPhoto.month}`}
                             type="file"
                             accept="image/*"
-                            className="hidden"
+                            className="sr-only"
                             onChange={(e) => handleFileChange(index, e)}
                           />
                         </label>
@@ -774,8 +973,10 @@ export function ApplicationForm() {
           {/* Events Section */}
           <Card className="p-6 lg:p-8">
             <CardHeader className="p-0 pb-4">
-              <CardTitle className="text-xl">Important Dates</CardTitle>
-              <CardDescription className="text-base">Add special dates and occasions (original date shows on that day every year)</CardDescription>
+              <CardTitle className="text-xl">Add dates and occasions</CardTitle>
+              <CardDescription className="text-base">
+                Attention: please mark the proper year.
+              </CardDescription>
             </CardHeader>
             <CardContent className="p-0 space-y-4">
               {dateEvents.map((event, index) => (

@@ -46,6 +46,7 @@ function publicCalendar(c) {
     datesFontSize: c.datesFontSize,
     archiveFolder: c.archiveFolder,
     archiveReplaceAll: c.archiveReplaceAll,
+    layoutMode: c.layoutMode || "landscape-spread",
     events: c.events,
     updatedAt: c.updatedAt,
     createdAt: c.createdAt,
@@ -53,7 +54,13 @@ function publicCalendar(c) {
 }
 
 const app = express();
-const upload = multer({ dest: "uploads/" });
+
+const TEMPLATE_PATH = path.join(__dirname, "template.html");
+const UPLOADS_DIR = path.join(__dirname, "uploads");
+if (!fs.existsSync(UPLOADS_DIR)) {
+  fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+}
+const upload = multer({ dest: UPLOADS_DIR });
 
 const PICTURES_DIR = path.join(__dirname, "Pictures");
 const IMAGE_EXT = new Set([".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp"]);
@@ -320,7 +327,10 @@ function guessMime(p) {
 }
 
 /** Chromium blocks file:// in setContent(); embed as data URL so PDF shows full photos */
-function getPhotoMarkup(images, index) {
+function getPhotoMarkup(images, index, layoutMode) {
+  const inline = layoutMode === "portrait-single";
+  const imgClass = inline ? "photo photo--inline" : "photo photo--spread";
+  const phClass = inline ? "photo-placeholder photo--inline" : "photo-placeholder photo--spread";
   const file = images && images[index];
   if (file && typeof file.path === "string" && fs.existsSync(file.path)) {
     try {
@@ -330,12 +340,12 @@ function getPhotoMarkup(images, index) {
         : guessMime(file.originalname || file.path);
       const b64 = buf.toString("base64");
       const src = `data:${mime};base64,${b64}`;
-      return `<img src="${src}" class="photo" alt="" />`;
+      return `<img src="${src}" class="${imgClass}" alt="" />`;
     } catch (e) {
       console.error("Photo read error:", e.message);
     }
   }
-  return `<div class="photo-placeholder" role="img" aria-label="No photo">No photo</div>`;
+  return `<div class="${phClass}" role="img" aria-label="No photo">No photo</div>`;
 }
 
 app.post("/generate", upload.any(), async (req, res) => {
@@ -347,7 +357,14 @@ app.post("/generate", upload.any(), async (req, res) => {
       startMonth = 1;
     }
     const weekStart = req.body.weekStart || "sunday";
-    const yearFont = req.body.yearFont || "Arial";
+    const layoutMode =
+      req.body.layoutMode === "portrait-single"
+        ? "portrait-single"
+        : "landscape-spread";
+    const bodyClass =
+      layoutMode === "portrait-single"
+        ? "pdf-layout-portrait-single"
+        : "pdf-layout-landscape-spread";
     const monthFont = req.body.monthFont || "Arial";
     const weekDaysFont = req.body.weekDaysFont || "Arial";
     const datesFont = req.body.datesFont || "Arial";
@@ -374,22 +391,14 @@ app.post("/generate", upload.any(), async (req, res) => {
     });
 
 
-    const template = fs.readFileSync("template.html", "utf-8");
+    const template = fs.readFileSync(TEMPLATE_PATH, "utf-8");
 
     const monthNames = [
       "January","February","March","April","May","June",
       "July","August","September","October","November","December"
     ];
 
-    const endYear = startYear + Math.floor((startMonth - 1 + 11) / 12);
-    const coverTitle =
-      endYear > startYear ? `${startYear} – ${endYear}` : String(startYear);
-
-    let monthsHtml = `
-      <div class="page">
-        <h1 style="font-family: ${yearFont}, serif">${coverTitle}</h1>
-      </div>
-    `;
+    let monthsHtml = "";
 
     const weekDayNames = weekStart === "monday"
       ? ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
@@ -434,33 +443,54 @@ app.post("/generate", upload.any(), async (req, res) => {
         `;
       });
 
-      const monthPageClass =
-        dateNumberSize === 5 ? "page page--date-size-5" : "page";
-      monthsHtml += `
-        <div class="${monthPageClass}">
-          <h1 style="font-family: ${monthFont}, serif">${monthNames[monthIndex]} ${pageYear}</h1>
-          ${getPhotoMarkup(images, monthIndex)}
+      if (layoutMode === "portrait-single") {
+        const combinedClass =
+          dateNumberSize === 5
+            ? "page page--month-combined page--date-size-5-combined"
+            : "page page--month-combined";
+        monthsHtml += `
+        <div class="${combinedClass}">
+          <h2 class="month-combined-title" style="font-family: ${monthFont}, serif">${monthNames[monthIndex]} ${pageYear}</h2>
+          <div class="month-combined-photo">${getPhotoMarkup(images, monthIndex, layoutMode)}</div>
           <div class="grid">${grid}</div>
         </div>
       `;
+      } else {
+        const calendarPageClass =
+          dateNumberSize === 5
+            ? "page page--month-calendar page--date-size-5"
+            : "page page--month-calendar";
+        monthsHtml += `
+        <div class="page page--month-photo">
+          <div class="month-photo-area">${getPhotoMarkup(images, monthIndex, layoutMode)}</div>
+          <h2 class="month-spread-title" style="font-family: ${monthFont}, serif">${monthNames[monthIndex]} ${pageYear}</h2>
+        </div>
+        <div class="${calendarPageClass}">
+          <div class="grid">${grid}</div>
+        </div>
+      `;
+      }
     }
 
-    const finalHtml = template.replace("{{content}}", monthsHtml);
+    const finalHtml = template
+      .replace("{{bodyClass}}", bodyClass)
+      .replace("{{content}}", monthsHtml);
 
     const browser = await puppeteer.launch({
       args: ["--no-sandbox", "--disable-setuid-sandbox"]
     });
-    
+
     const page = await browser.newPage();
 
     await page.setContent(finalHtml, { waitUntil: "load", timeout: 30000 });
 
-    const pdfPath = `calendar-${Date.now()}.pdf`;
+    const pdfPath = path.join(__dirname, `calendar-${Date.now()}.pdf`);
 
     await page.pdf({
       path: pdfPath,
       format: "A4",
-      printBackground: true
+      landscape: layoutMode === "landscape-spread",
+      printBackground: true,
     });
 
     await browser.close();

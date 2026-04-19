@@ -104,6 +104,10 @@ function upsertSavedCalendar(userId, payload) {
     datesFontSize: String(payload.datesFontSize || "3"),
     archiveFolder: typeof payload.archiveFolder === "string" ? payload.archiveFolder : "",
     archiveReplaceAll: Boolean(payload.archiveReplaceAll),
+    layoutMode:
+      payload.layoutMode === "portrait-single"
+        ? "portrait-single"
+        : "landscape-spread",
     events: normalizeEvents(payload.events),
     updatedAt: now,
     createdAt:
