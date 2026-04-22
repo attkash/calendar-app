@@ -530,10 +530,11 @@ app.use((req, res, next) => {
   res.sendFile(indexHtml);
 });
 
-const PORT = 3000;
+const PORT = Number.parseInt(process.env.PORT, 10) || 3000;
+const HOST = process.env.HOST || "0.0.0.0";
 
-const server = app.listen(PORT, () => {
-  console.log("Server running on http://localhost:" + PORT);
+const server = app.listen(PORT, HOST, () => {
+  console.log(`Server running on http://${HOST}:${PORT}`);
 });
 
 server.on("error", (err) => {
