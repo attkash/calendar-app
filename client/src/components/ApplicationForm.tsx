@@ -26,7 +26,7 @@ const MONTHS = [
   'July', 'August', 'September', 'October', 'November', 'December'
 ];
 
-/** Approximate preview px; PDF uses mm (sizes 4–5 tied to 18mm cell min-height in template). */
+/** Approximate preview px; PDF uses mm (sizes 4–5 tied to ~14mm cell min-height in template). */
 const DATE_NUMBER_SIZE_OPTIONS: { value: string; label: string; previewPx: number }[] = [
   { value: '1', label: '1 — Small', previewPx: 11 },
   { value: '2', label: '2 — Medium', previewPx: 14 },
@@ -90,6 +90,45 @@ function isImageFile(f: File) {
   return f.type.startsWith('image/') || /\.(jpe?g|png|gif|webp|bmp)$/i.test(f.name);
 }
 
+const LS_CALENDAR_CACHE_PREFIX = 'calendarApp.savedCalendar:';
+const LS_NEW_CALENDAR_DRAFT = 'calendarApp.newCalendarDraft';
+const DRAFT_VERSION = 1;
+
+function calendarCacheKey(id: string) {
+  return `${LS_CALENDAR_CACHE_PREFIX}${id}`;
+}
+
+function readCachedSavedCalendar(id: string): SavedCalendarFull | null {
+  try {
+    const raw = localStorage.getItem(calendarCacheKey(id));
+    if (!raw) return null;
+    const o = JSON.parse(raw) as SavedCalendarFull;
+    if (!o || typeof o !== 'object' || o.id !== id) return null;
+    return o;
+  } catch {
+    return null;
+  }
+}
+
+function writeCachedSavedCalendar(cal: SavedCalendarFull) {
+  try {
+    const lean = { ...cal } as SavedCalendarFull & { monthImages?: unknown };
+    delete lean.monthImages;
+    const payload = JSON.stringify(lean);
+    if (payload.length > 4_500_000) return;
+    localStorage.setItem(calendarCacheKey(cal.id), payload);
+  } catch {
+    /* quota / private mode */
+  }
+}
+
+function pickFont(value: string | undefined, fallback: string) {
+  const v = String(value ?? '').trim();
+  if (!v) return fallback;
+  if (FONT_OPTIONS.includes(v)) return v;
+  return v;
+}
+
 export function ApplicationForm() {
   const bulkFileInputRef = useRef<HTMLInputElement>(null);
   const [bulkDragActive, setBulkDragActive] = useState(false);
@@ -124,8 +163,9 @@ export function ApplicationForm() {
   const { presetId } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
-  const { token, user } = useAuth();
+  const { token, user, loading: authLoading } = useAuth();
   const [presetLoading, setPresetLoading] = useState(() => Boolean(presetId));
+  const presetLoadGen = useRef(0);
 
   const fetchPictureSubfolders = useCallback(async () => {
     setLoadingFolders(true);
@@ -145,71 +185,241 @@ export function ApplicationForm() {
     fetchPictureSubfolders();
   }, [fetchPictureSubfolders]);
 
+  const fetchArchiveImage = useCallback(async (fileMeta: { name: string; path: string }) => {
+    const rawUrl = `${API_URL}/api/pictures/raw?path=${encodeURIComponent(fileMeta.path)}`;
+    const imgRes = await fetch(rawUrl);
+    if (!imgRes.ok) return null;
+    const blob = await imgRes.blob();
+    const file = new File([blob], fileMeta.name, { type: blob.type || 'image/jpeg' });
+    const preview = URL.createObjectURL(blob);
+    return { file, preview };
+  }, []);
+
   const applyCalendar = useCallback((cal: SavedCalendarFull) => {
-    setYear(String(cal.year));
-    setStartMonth(String(cal.startMonth));
-    setWeekStart(cal.weekStart);
-    setYearFont(cal.yearFont);
-    setMonthFont(cal.monthFont);
-    setWeekDaysFont(cal.weekDaysFont);
-    setDatesFont(cal.datesFont);
-    setDatesFontSize(cal.datesFontSize);
-    setArchiveFolder(cal.archiveFolder || '');
-    setArchiveReplaceAll(cal.archiveReplaceAll);
+    setMonthPhotos((prev) => {
+      prev.forEach((p) => {
+        if (p.preview) URL.revokeObjectURL(p.preview);
+      });
+      return MONTHS.map((month) => ({ month, file: null, preview: null }));
+    });
+    const y = Number.isFinite(Number(cal.year)) ? Number(cal.year) : new Date().getFullYear();
+    setYear(String(y));
+    const sm = Number.isFinite(Number(cal.startMonth))
+      ? Math.min(12, Math.max(1, Number(cal.startMonth)))
+      : 1;
+    setStartMonth(String(sm));
+    setWeekStart(cal.weekStart === 'monday' ? 'monday' : 'sunday');
+    setYearFont(pickFont(cal.yearFont, 'Arial'));
+    setMonthFont(pickFont(cal.monthFont, 'Arial'));
+    setWeekDaysFont(pickFont(cal.weekDaysFont, 'Arial'));
+    setDatesFont(pickFont(cal.datesFont, 'Arial'));
+    const dfs = String(cal.datesFontSize ?? '3').trim();
+    setDatesFontSize(
+      DATE_NUMBER_SIZE_OPTIONS.some((o) => o.value === dfs) ? dfs : '3'
+    );
+    setArchiveFolder(typeof cal.archiveFolder === 'string' ? cal.archiveFolder : '');
+    setArchiveReplaceAll(Boolean(cal.archiveReplaceAll));
     setLayoutMode(cal.layoutMode === 'portrait-single' ? 'portrait-single' : 'landscape-spread');
-    setSaveName(cal.name || 'My calendar');
+    setSaveName((cal.name && String(cal.name).trim()) || 'My calendar');
+    const rawEvents = Array.isArray(cal.events) ? cal.events : [];
     const evs =
-      cal.events && cal.events.length > 0
-        ? cal.events.map((e, i) => ({
-            id: `loaded-${i}-${e.date}`,
-            date: e.date,
-            reason: e.occasion,
-          }))
+      rawEvents.length > 0
+        ? rawEvents
+            .filter((e) => e && (String(e.date || '').trim() || String(e.occasion || '').trim()))
+            .map((e, i) => ({
+              id: `loaded-${i}-${e.date}`,
+              date: String(e.date || '').trim(),
+              reason: String(e.occasion || '').trim(),
+            }))
         : [{ id: '1', date: '', reason: '' }];
-    setDateEvents(evs);
+    setDateEvents(evs.length > 0 ? evs : [{ id: '1', date: '', reason: '' }]);
   }, []);
 
   useEffect(() => {
+    if (authLoading) return;
     if (!presetId) {
       setEditingPresetId(null);
       setPresetLoading(false);
       return;
     }
     if (!token) {
+      setPresetLoading(false);
       navigate('/login', { replace: true, state: { from: location.pathname } });
       return;
     }
+    const gen = ++presetLoadGen.current;
     let cancelled = false;
+    const isStale = () => cancelled || gen !== presetLoadGen.current;
     setPresetLoading(true);
     (async () => {
       try {
         const res = await fetch(`${API_URL}/api/saved-calendars/${presetId}`, {
           headers: { ...authHeaders(token) },
         });
+        if (isStale()) return;
         if (res.status === 401) {
           navigate('/login', { state: { from: location.pathname } });
           return;
         }
         if (!res.ok) {
-          if (!cancelled) setError('Could not load saved calendar');
+          const cached = readCachedSavedCalendar(presetId);
+          if (cached) {
+            applyCalendar(cached);
+            if (!isStale()) {
+              setEditingPresetId(cached.id);
+              setSaveInfo(
+                res.status === 404
+                  ? 'This calendar is not on the server anymore — showing the last copy stored in this browser.'
+                  : 'Could not load from the server — showing the last copy stored in this browser.'
+              );
+              setSaveErr(null);
+            }
+          } else if (!isStale()) {
+            setError('Could not load saved calendar');
+          }
           return;
         }
         const data = (await res.json()) as { calendar: SavedCalendarFull };
-        if (cancelled) return;
-        applyCalendar(data.calendar);
-        setEditingPresetId(data.calendar.id);
+        if (isStale()) return;
+        const cal = data.calendar;
+        if (!cal?.id) {
+          if (!isStale()) setError('Could not load saved calendar');
+          return;
+        }
+        applyCalendar(cal);
+        if (isStale()) return;
+        writeCachedSavedCalendar(cal);
+        setEditingPresetId(cal.id);
         setSaveInfo(null);
         setSaveErr(null);
       } catch {
-        if (!cancelled) setError('Error loading saved calendar');
+        if (isStale()) return;
+        const cached = readCachedSavedCalendar(presetId);
+        if (cached) {
+          applyCalendar(cached);
+          if (!isStale()) {
+            setEditingPresetId(cached.id);
+            setSaveInfo('Network error — showing the last copy stored in this browser.');
+            setSaveErr(null);
+          }
+        } else {
+          setError('Error loading saved calendar');
+        }
       } finally {
-        if (!cancelled) setPresetLoading(false);
+        if (gen === presetLoadGen.current) {
+          setPresetLoading(false);
+        }
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [presetId, token, navigate, location.pathname, applyCalendar]);
+  }, [presetId, token, authLoading, navigate, location.pathname, applyCalendar]);
+
+  useEffect(() => {
+    if (authLoading || presetId) return;
+    if (location.pathname !== '/calendar') return;
+    try {
+      const raw = localStorage.getItem(LS_NEW_CALENDAR_DRAFT);
+      if (!raw) return;
+      const d = JSON.parse(raw) as {
+        v?: number;
+        forUser?: string | null;
+        year?: string;
+        startMonth?: string;
+        weekStart?: 'monday' | 'sunday';
+        yearFont?: string;
+        monthFont?: string;
+        weekDaysFont?: string;
+        datesFont?: string;
+        datesFontSize?: string;
+        archiveFolder?: string;
+        archiveReplaceAll?: boolean;
+        layoutMode?: PdfLayoutMode;
+        saveName?: string;
+        events?: { id: string; date: string; reason: string }[];
+      };
+      if (d.v !== DRAFT_VERSION) return;
+      if (d.forUser) {
+        if (!user?.username || d.forUser !== user.username) return;
+      }
+      if (d.year != null) setYear(String(d.year));
+      if (d.startMonth != null) setStartMonth(String(d.startMonth));
+      if (d.weekStart === 'monday' || d.weekStart === 'sunday') setWeekStart(d.weekStart);
+      if (d.yearFont) setYearFont(pickFont(d.yearFont, 'Arial'));
+      if (d.monthFont) setMonthFont(pickFont(d.monthFont, 'Arial'));
+      if (d.weekDaysFont) setWeekDaysFont(pickFont(d.weekDaysFont, 'Arial'));
+      if (d.datesFont) setDatesFont(pickFont(d.datesFont, 'Arial'));
+      if (d.datesFontSize && DATE_NUMBER_SIZE_OPTIONS.some((o) => o.value === d.datesFontSize)) {
+        setDatesFontSize(d.datesFontSize);
+      }
+      if (typeof d.archiveFolder === 'string') setArchiveFolder(d.archiveFolder);
+      if (typeof d.archiveReplaceAll === 'boolean') setArchiveReplaceAll(d.archiveReplaceAll);
+      if (d.layoutMode === 'portrait-single' || d.layoutMode === 'landscape-spread') {
+        setLayoutMode(d.layoutMode);
+      }
+      if (typeof d.saveName === 'string' && d.saveName.trim()) setSaveName(d.saveName.trim());
+      if (Array.isArray(d.events) && d.events.length > 0) {
+        setDateEvents(
+          d.events.map((e, i) => ({
+            id: e.id || `draft-${i}`,
+            date: String(e.date ?? ''),
+            reason: String(e.reason ?? ''),
+          }))
+        );
+      }
+    } catch {
+      /* ignore corrupt draft */
+    }
+  }, [authLoading, presetId, location.pathname, user?.username]);
+
+  useEffect(() => {
+    if (presetId || presetLoading) return;
+    if (location.pathname !== '/calendar') return;
+    const t = window.setTimeout(() => {
+      try {
+        const payload = {
+          v: DRAFT_VERSION,
+          forUser: user?.username ?? null,
+          year,
+          startMonth,
+          weekStart,
+          yearFont,
+          monthFont,
+          weekDaysFont,
+          datesFont,
+          datesFontSize,
+          archiveFolder,
+          archiveReplaceAll,
+          layoutMode,
+          saveName,
+          events: dateEvents.map(({ id, date, reason }) => ({ id, date, reason })),
+        };
+        localStorage.setItem(LS_NEW_CALENDAR_DRAFT, JSON.stringify(payload));
+      } catch {
+        /* quota */
+      }
+    }, 1800);
+    return () => window.clearTimeout(t);
+  }, [
+    presetId,
+    presetLoading,
+    location.pathname,
+    user?.username,
+    year,
+    startMonth,
+    weekStart,
+    yearFont,
+    monthFont,
+    weekDaysFont,
+    datesFont,
+    datesFontSize,
+    archiveFolder,
+    archiveReplaceAll,
+    layoutMode,
+    saveName,
+    dateEvents,
+  ]);
 
   const handleFileChange = (monthIndex: number, event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -261,16 +471,6 @@ export function ApplicationForm() {
     });
   };
 
-  const fetchArchiveImage = async (fileMeta: { name: string; path: string }) => {
-    const rawUrl = `${API_URL}/api/pictures/raw?path=${encodeURIComponent(fileMeta.path)}`;
-    const imgRes = await fetch(rawUrl);
-    if (!imgRes.ok) return null;
-    const blob = await imgRes.blob();
-    const file = new File([blob], fileMeta.name, { type: blob.type || 'image/jpeg' });
-    const preview = URL.createObjectURL(blob);
-    return { file, preview };
-  };
-
   const loadPicturesFromArchive = async () => {
     setError(null);
     setLoadingArchive(true);
@@ -306,14 +506,19 @@ export function ApplicationForm() {
       let fileIdx = 0;
       for (let slot = 0; slot < 12 && fileIdx < files.length; slot++) {
         if (!archiveReplaceAll && base[slot].file) continue;
-        const loaded = await fetchArchiveImage(files[fileIdx]);
+        const meta = files[fileIdx];
         fileIdx += 1;
+        const loaded = await fetchArchiveImage(meta);
         if (!loaded) continue;
         const oldPreview = base[slot].preview;
         if (!archiveReplaceAll && oldPreview) {
           URL.revokeObjectURL(oldPreview);
         }
-        base[slot] = { month: MONTHS[slot], file: loaded.file, preview: loaded.preview };
+        base[slot] = {
+          month: MONTHS[slot],
+          file: loaded.file,
+          preview: loaded.preview,
+        };
       }
 
       setMonthPhotos(base);
@@ -345,24 +550,6 @@ export function ApplicationForm() {
     );
   };
 
-  const buildSavePayload = () => ({
-    name: saveName.trim() || 'Calendar',
-    year: parseInt(year, 10) || new Date().getFullYear(),
-    startMonth: parseInt(startMonth, 10) || 1,
-    weekStart,
-    yearFont,
-    monthFont,
-    weekDaysFont,
-    datesFont,
-    datesFontSize,
-    archiveFolder,
-    archiveReplaceAll,
-    layoutMode,
-    events: dateEvents
-      .filter((e) => e.date && e.reason)
-      .map((e) => ({ date: e.date, occasion: e.reason })),
-  });
-
   const handleSaveToAccount = async () => {
     setSaveErr(null);
     setSaveInfo(null);
@@ -372,7 +559,23 @@ export function ApplicationForm() {
     }
     setSavingPreset(true);
     try {
-      const body = buildSavePayload();
+      const body = {
+        name: saveName.trim() || 'Calendar',
+        year: parseInt(year, 10) || new Date().getFullYear(),
+        startMonth: parseInt(startMonth, 10) || 1,
+        weekStart,
+        yearFont,
+        monthFont,
+        weekDaysFont,
+        datesFont,
+        datesFontSize,
+        archiveFolder,
+        archiveReplaceAll,
+        layoutMode,
+        events: dateEvents
+          .filter((e) => e.date && e.reason)
+          .map((e) => ({ date: e.date, occasion: e.reason })),
+      };
       const id = editingPresetId;
       const url = id
         ? `${API_URL}/api/saved-calendars/${id}`
@@ -391,6 +594,12 @@ export function ApplicationForm() {
         return;
       }
       if (data.calendar) {
+        writeCachedSavedCalendar(data.calendar);
+        try {
+          localStorage.removeItem(LS_NEW_CALENDAR_DRAFT);
+        } catch {
+          /* ignore */
+        }
         setEditingPresetId(data.calendar.id);
         setSaveName(data.calendar.name);
         setSaveInfo(
@@ -513,7 +722,7 @@ export function ApplicationForm() {
               <CardTitle className="text-xl">Save to your account</CardTitle>
               <CardDescription className="text-base">
                 {user
-                  ? 'Stores dates and settings (fonts, week start, Pictures folder). Photos for the PDF must be uploaded or loaded from the server each time.'
+                  ? 'Saves dates and design (fonts, layout, week start, Pictures folder path) — not month photos. Add or load photos again before generating a PDF.'
                   : 'Sign in or register to keep a template between years and open it from your account.'}
               </CardDescription>
             </CardHeader>

@@ -84,12 +84,12 @@
       width: 100%;
       display: grid;
       grid-template-columns: repeat(7, 1fr);
-      grid-auto-rows: minmax(22mm, 1fr);
+      grid-auto-rows: minmax(15mm, 1fr);
       gap: 2px;
       align-content: stretch;
     }
     body.pdf-layout-landscape-spread .page--month-calendar .cell {
-      min-height: 22mm;
+      min-height: 15mm;
       border: 1px solid #e0e0e0;
       padding: 3px;
       display: flex;
@@ -97,11 +97,16 @@
       font-size: 10px;
     }
     body.pdf-layout-landscape-spread .page--month-calendar .cell-header {
-      min-height: 11mm;
+      min-height: 9mm;
       font-weight: 600;
+      font-size: 4.2mm;
+      letter-spacing: 0.03em;
       color: #2c3e50;
       text-align: center;
       background: #f8f9fa;
+      display: flex;
+      align-items: center;
+      justify-content: center;
     }
     body.pdf-layout-landscape-spread .page--month-calendar .date {
       font-weight: 600;
@@ -121,16 +126,17 @@
 
     body.pdf-layout-landscape-spread .page--month-calendar.page--date-size-5 .grid {
       gap: 1px;
-      grid-auto-rows: minmax(18mm, 1fr);
+      grid-auto-rows: minmax(13mm, 1fr);
     }
     body.pdf-layout-landscape-spread .page--month-calendar.page--date-size-5 .cell:not(.cell-header) {
       padding: 1px 2px;
-      min-height: 18mm;
+      min-height: 13mm;
       overflow: hidden;
     }
     body.pdf-layout-landscape-spread .page--month-calendar.page--date-size-5 .cell-header {
-      min-height: 9mm;
+      min-height: 8mm;
       padding: 2px;
+      font-size: 3.8mm;
     }
     body.pdf-layout-landscape-spread .page--month-calendar.page--date-size-5 .date {
       line-height: 0.95;
@@ -199,11 +205,11 @@
       min-height: 0;
       display: grid;
       grid-template-columns: repeat(7, 1fr);
-      grid-auto-rows: minmax(16mm, 1fr);
+      grid-auto-rows: minmax(12mm, 1fr);
       gap: 2px;
     }
     body.pdf-layout-portrait-single .page--month-combined .cell {
-      min-height: 16mm;
+      min-height: 12mm;
       border: 1px solid #e0e0e0;
       padding: 3px;
       display: flex;
@@ -211,11 +217,16 @@
       font-size: 10px;
     }
     body.pdf-layout-portrait-single .page--month-combined .cell-header {
-      min-height: 10mm;
+      min-height: 8mm;
       font-weight: 600;
+      font-size: 3.8mm;
+      letter-spacing: 0.03em;
       color: #2c3e50;
       text-align: center;
       background: #f8f9fa;
+      display: flex;
+      align-items: center;
+      justify-content: center;
     }
     body.pdf-layout-portrait-single .page--month-combined .date {
       font-weight: 600;
@@ -240,12 +251,16 @@
     }
     body.pdf-layout-portrait-single .page--month-combined.page--date-size-5-combined .grid {
       gap: 1px;
-      grid-auto-rows: minmax(18mm, 1fr);
+      grid-auto-rows: minmax(12mm, 1fr);
     }
     body.pdf-layout-portrait-single .page--month-combined.page--date-size-5-combined .cell:not(.cell-header) {
       padding: 1px 2px;
-      min-height: 18mm;
+      min-height: 12mm;
       overflow: hidden;
+    }
+    body.pdf-layout-portrait-single .page--month-combined.page--date-size-5-combined .cell-header {
+      min-height: 7mm;
+      font-size: 3.5mm;
     }
     body.pdf-layout-portrait-single .page--month-combined.page--date-size-5-combined .date {
       line-height: 0.95;
@@ -254,6 +269,25 @@
     body.pdf-layout-portrait-single .page--month-combined.page--date-size-5-combined .event {
       font-size: 7px;
       line-height: 1.2;
+    }
+
+    /* Weekend columns: Sat & Sun (column order follows week start in HTML) */
+    body.pdf-layout-landscape-spread .cell-header--weekend,
+    body.pdf-layout-portrait-single .cell-header--weekend {
+      color: #b42318 !important;
+      background: #fef2f2;
+    }
+    body.pdf-layout-landscape-spread .cell--weekend:not(.cell-header),
+    body.pdf-layout-portrait-single .cell--weekend:not(.cell-header) {
+      background: #fffafa;
+    }
+    body.pdf-layout-landscape-spread .cell--weekend:not(.cell-header) .date,
+    body.pdf-layout-portrait-single .cell--weekend:not(.cell-header) .date {
+      color: #b42318;
+    }
+    body.pdf-layout-landscape-spread .cell--weekend:not(.cell-header) .event,
+    body.pdf-layout-portrait-single .cell--weekend:not(.cell-header) .event {
+      color: #6b2c2c;
     }
 
     @page { margin: 0; }

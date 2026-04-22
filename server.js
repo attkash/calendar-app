@@ -66,7 +66,7 @@ const PICTURES_DIR = path.join(__dirname, "Pictures");
 const IMAGE_EXT = new Set([".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp"]);
 
 /** PDF day cell min-height in template.html (.cell); size 4 = 1/4 of this; size 5 = full cell. */
-const CALENDAR_CELL_MIN_MM = 18;
+const CALENDAR_CELL_MIN_MM = 14;
 const DATE_NUMBER_FONT_MM = {
   1: 2,
   2: 2.75,
@@ -283,6 +283,12 @@ app.get("/api/pictures/raw", (req, res) => {
   });
 });
 
+/** Column index 0–6 within a week row; true for Saturday & Sunday (column depends on weekStart). */
+function isWeekendColumn(col, weekStart) {
+  if (weekStart === "monday") return col === 5 || col === 6;
+  return col === 0 || col === 6;
+}
+
 function generateCalendar(year, month, weekStart = "sunday") {
   const date = new Date(year, month, 1);
   const days = [];
@@ -411,10 +417,17 @@ app.post("/generate", upload.any(), async (req, res) => {
       const days = generateCalendar(pageYear, monthIndex, weekStart);
 
       let grid = weekDayNames
-        .map((name) => `<div class="cell cell-header" style="font-family: ${weekDaysFont}, sans-serif">${name}</div>`)
+        .map((name, col) => {
+          const wk = isWeekendColumn(col, weekStart);
+          const cls = wk ? "cell cell-header cell-header--weekend" : "cell cell-header";
+          return `<div class="${cls}" style="font-family: ${weekDaysFont}, sans-serif">${name}</div>`;
+        })
         .join("");
 
-      days.forEach((day) => {
+      days.forEach((day, i) => {
+        const col = i % 7;
+        const wk = isWeekendColumn(col, weekStart);
+        const cellCls = wk ? "cell cell--weekend" : "cell";
         let eventHtml = "";
         if (day !== "") {
           const monthDayKey = `${String(monthIndex + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
@@ -436,7 +449,7 @@ app.post("/generate", upload.any(), async (req, res) => {
         }
 
         grid += `
-          <div class="cell" style="font-family: ${datesFont}, sans-serif">
+          <div class="${cellCls}" style="font-family: ${datesFont}, sans-serif">
             <div class="date" style="font-size: ${dateNumberMm}mm; font-family: ${datesFont}, sans-serif">${day || ""}</div>
             <div class="event">${eventHtml}</div>
           </div>

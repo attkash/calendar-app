@@ -15,17 +15,30 @@
       "name": "Мой calendar",
       "year": 2026,
       "startMonth": 1,
-      "weekStart": "sunday",
+      "weekStart": "monday",
       "yearFont": "Arial",
       "monthFont": "Arial",
       "weekDaysFont": "Arial",
       "datesFont": "Arial",
-      "datesFontSize": "3",
-      "archiveFolder": "",
+      "datesFontSize": "5",
+      "archiveFolder": "calendar ginea pigs graphic",
       "archiveReplaceAll": true,
-      "archiveCoverFrom13": false,
-      "events": [],
-      "updatedAt": "2026-04-16T01:44:27.568Z",
+      "layoutMode": "portrait-single",
+      "events": [
+        {
+          "date": "2003-02-12",
+          "occasion": "Amanzhol"
+        },
+        {
+          "date": "2009-04-14",
+          "occasion": "Kuralai"
+        },
+        {
+          "date": "1969-11-24",
+          "occasion": "Amy"
+        }
+      ],
+      "updatedAt": "2026-04-22T00:19:48.833Z",
       "createdAt": "2026-04-16T01:44:01.870Z"
     }
   ]
