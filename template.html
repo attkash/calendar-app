@@ -96,6 +96,38 @@
       flex-direction: column;
       font-size: 10px;
     }
+    body.pdf-layout-landscape-spread .page--month-calendar .cell-day-top {
+      flex-shrink: 0;
+      display: flex;
+      width: 100%;
+    }
+    body.pdf-layout-landscape-spread .page--month-calendar .cell.date-pos-top-left .cell-day-top {
+      justify-content: flex-start;
+    }
+    body.pdf-layout-landscape-spread .page--month-calendar .cell.date-pos-top-left .date {
+      text-align: left;
+    }
+    body.pdf-layout-landscape-spread .page--month-calendar .cell.date-pos-top-center .cell-day-top {
+      justify-content: center;
+    }
+    body.pdf-layout-landscape-spread .page--month-calendar .cell.date-pos-top-center .date {
+      text-align: center;
+    }
+    body.pdf-layout-landscape-spread .page--month-calendar .cell.date-pos-center .cell-day-top {
+      flex: 1;
+      min-height: 0;
+      align-items: center;
+      justify-content: center;
+    }
+    body.pdf-layout-landscape-spread .page--month-calendar .cell.date-pos-center .date {
+      text-align: center;
+    }
+    body.pdf-layout-landscape-spread .page--month-calendar .cell.date-pos-center .event {
+      flex-shrink: 1;
+      min-height: 0;
+      max-height: 55%;
+      overflow: hidden;
+    }
     body.pdf-layout-landscape-spread .page--month-calendar .cell-header {
       min-height: 9mm;
       font-weight: 600;
@@ -215,6 +247,38 @@
       display: flex;
       flex-direction: column;
       font-size: 10px;
+    }
+    body.pdf-layout-portrait-single .page--month-combined .cell-day-top {
+      flex-shrink: 0;
+      display: flex;
+      width: 100%;
+    }
+    body.pdf-layout-portrait-single .page--month-combined .cell.date-pos-top-left .cell-day-top {
+      justify-content: flex-start;
+    }
+    body.pdf-layout-portrait-single .page--month-combined .cell.date-pos-top-left .date {
+      text-align: left;
+    }
+    body.pdf-layout-portrait-single .page--month-combined .cell.date-pos-top-center .cell-day-top {
+      justify-content: center;
+    }
+    body.pdf-layout-portrait-single .page--month-combined .cell.date-pos-top-center .date {
+      text-align: center;
+    }
+    body.pdf-layout-portrait-single .page--month-combined .cell.date-pos-center .cell-day-top {
+      flex: 1;
+      min-height: 0;
+      align-items: center;
+      justify-content: center;
+    }
+    body.pdf-layout-portrait-single .page--month-combined .cell.date-pos-center .date {
+      text-align: center;
+    }
+    body.pdf-layout-portrait-single .page--month-combined .cell.date-pos-center .event {
+      flex-shrink: 1;
+      min-height: 0;
+      max-height: 55%;
+      overflow: hidden;
     }
     body.pdf-layout-portrait-single .page--month-combined .cell-header {
       min-height: 8mm;

@@ -12,7 +12,7 @@ function ensureFile() {
   if (!fs.existsSync(DATA_PATH)) {
     fs.writeFileSync(
       DATA_PATH,
-      JSON.stringify({ users: [], savedCalendars: [] }, null, 2),
+      JSON.stringify({ users: [], savedCalendars: [], downloadEntitlements: [] }, null, 2),
       "utf-8"
     );
   }
@@ -25,10 +25,11 @@ function load() {
     const data = JSON.parse(raw);
     if (!Array.isArray(data.users)) data.users = [];
     if (!Array.isArray(data.savedCalendars)) data.savedCalendars = [];
+    if (!Array.isArray(data.downloadEntitlements)) data.downloadEntitlements = [];
     return data;
   } catch (e) {
     console.error("dataStore load:", e);
-    return { users: [], savedCalendars: [] };
+    return { users: [], savedCalendars: [], downloadEntitlements: [] };
   }
 }
 
@@ -102,6 +103,12 @@ function upsertSavedCalendar(userId, payload) {
     weekDaysFont: String(payload.weekDaysFont || "Arial"),
     datesFont: String(payload.datesFont || "Arial"),
     datesFontSize: String(payload.datesFontSize || "3"),
+    dateNumberPosition:
+      payload.dateNumberPosition === "center" ||
+      payload.dateNumberPosition === "top-center" ||
+      payload.dateNumberPosition === "top-left"
+        ? payload.dateNumberPosition
+        : "top-left",
     archiveFolder: typeof payload.archiveFolder === "string" ? payload.archiveFolder : "",
     archiveReplaceAll: Boolean(payload.archiveReplaceAll),
     layoutMode:
@@ -150,6 +157,46 @@ function normalizeEvents(events) {
     .filter((e) => e.date && e.occasion);
 }
 
+function createDownloadEntitlement({ id, payload, imageFilenames }) {
+  const data = load();
+  const now = new Date().toISOString();
+  const row = {
+    id,
+    payload,
+    imageFilenames: Array.isArray(imageFilenames) ? imageFilenames : [],
+    paid: false,
+    stripeSessionId: null,
+    consumedAt: null,
+    createdAt: now,
+  };
+  data.downloadEntitlements.push(row);
+  save(data);
+  return row;
+}
+
+function getDownloadEntitlement(id) {
+  return load().downloadEntitlements.find((x) => x.id === id) || null;
+}
+
+function markDownloadEntitlementPaid(id, stripeSessionId) {
+  const data = load();
+  const row = data.downloadEntitlements.find((x) => x.id === id);
+  if (!row) return false;
+  row.paid = true;
+  row.stripeSessionId = String(stripeSessionId || "");
+  save(data);
+  return true;
+}
+
+function markDownloadEntitlementConsumed(id) {
+  const data = load();
+  const row = data.downloadEntitlements.find((x) => x.id === id);
+  if (!row) return false;
+  row.consumedAt = new Date().toISOString();
+  save(data);
+  return true;
+}
+
 module.exports = {
   load,
   save,
@@ -160,4 +207,8 @@ module.exports = {
   getSavedCalendar,
   upsertSavedCalendar,
   deleteSavedCalendar,
+  createDownloadEntitlement,
+  getDownloadEntitlement,
+  markDownloadEntitlementPaid,
+  markDownloadEntitlementConsumed,
 };

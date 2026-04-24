@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/
 import { RadioGroup, RadioGroupItem } from './ui/radio-group';
 import { Upload, X, Plus, FolderOpen, RefreshCw, LayoutDashboard, Save } from 'lucide-react';
 import { useAuth, authHeaders } from '../context/AuthContext';
-import type { PdfLayoutMode, SavedCalendarFull } from '../types/calendar';
+import type { DateNumberPosition, PdfLayoutMode, SavedCalendarFull } from '../types/calendar';
 
 interface MonthPhoto {
   month: string;
@@ -33,6 +33,21 @@ const DATE_NUMBER_SIZE_OPTIONS: { value: string; label: string; previewPx: numbe
   { value: '3', label: '3 — Large (default)', previewPx: 17 },
   { value: '4', label: '4 — Bigger (¼ cell height)', previewPx: 21 },
   { value: '5', label: '5 — Full cell height', previewPx: 30 },
+];
+
+/** Min height for the date cell in the Week & Fonts preview (screen only). */
+const DATE_CELL_PREVIEW_MIN_HEIGHT: Record<string, string> = {
+  '1': '3.35rem',
+  '2': '3.75rem',
+  '3': '4.25rem',
+  '4': '5rem',
+  '5': '5.75rem',
+};
+
+const DATE_POSITION_OPTIONS: { value: DateNumberPosition; label: string }[] = [
+  { value: 'top-left', label: 'Top left' },
+  { value: 'top-center', label: 'Top center' },
+  { value: 'center', label: 'Center of cell' },
 ];
 
 const FONT_OPTIONS = [
@@ -130,6 +145,7 @@ function pickFont(value: string | undefined, fallback: string) {
 }
 
 export function ApplicationForm() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const bulkFileInputRef = useRef<HTMLInputElement>(null);
   const [bulkDragActive, setBulkDragActive] = useState(false);
   const [year, setYear] = useState('2026');
@@ -146,9 +162,14 @@ export function ApplicationForm() {
   const [weekDaysFont, setWeekDaysFont] = useState('Arial');
   const [datesFont, setDatesFont] = useState('Arial');
   const [datesFontSize, setDatesFontSize] = useState('3');
+  const [dateNumberPosition, setDateNumberPosition] = useState<DateNumberPosition>('top-left');
   const [layoutMode, setLayoutMode] = useState<PdfLayoutMode>('landscape-spread');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** After Stripe return: show receipt text (amount from Stripe when available). */
+  const [paymentSuccessModal, setPaymentSuccessModal] = useState<{
+    formattedAmount: string | null;
+  } | null>(null);
   const [archiveFolder, setArchiveFolder] = useState('');
   const [loadingArchive, setLoadingArchive] = useState(false);
   const [archiveReplaceAll, setArchiveReplaceAll] = useState(true);
@@ -185,6 +206,85 @@ export function ApplicationForm() {
     fetchPictureSubfolders();
   }, [fetchPictureSubfolders]);
 
+  useEffect(() => {
+    const checkout = searchParams.get('checkout');
+    if (checkout === 'cancel') {
+      setError('Checkout was cancelled. You can try again when you are ready.');
+      setSearchParams({}, { replace: true });
+      return;
+    }
+    if (checkout !== 'success') return;
+
+    const sessionId = searchParams.get('session_id');
+    const entitlementId = searchParams.get('entitlement_id');
+    if (!sessionId || !entitlementId) {
+      setSearchParams({}, { replace: true });
+      return;
+    }
+
+    let cancelled = false;
+    (async () => {
+      let formattedAmount: string | null = null;
+      try {
+        const sumRes = await fetch(
+          `${API_URL}/api/calendar/checkout-summary?session_id=${encodeURIComponent(sessionId)}&entitlement_id=${encodeURIComponent(entitlementId)}`
+        );
+        if (sumRes.ok) {
+          const sum = (await sumRes.json()) as {
+            amountTotal: number | null;
+            currency: string;
+          };
+          if (sum.amountTotal != null && sum.currency) {
+            try {
+              formattedAmount = new Intl.NumberFormat('en-US', {
+                style: 'currency',
+                currency: sum.currency.toUpperCase(),
+              }).format(sum.amountTotal / 100);
+            } catch {
+              formattedAmount = null;
+            }
+          }
+        }
+      } catch {
+        /* summary optional */
+      }
+      if (!cancelled) {
+        setPaymentSuccessModal({ formattedAmount });
+      }
+
+      try {
+        const res = await fetch(
+          `${API_URL}/api/calendar/download?session_id=${encodeURIComponent(sessionId)}&entitlement_id=${encodeURIComponent(entitlementId)}`
+        );
+        if (cancelled) return;
+        if (!res.ok) {
+          const data = (await res.json().catch(() => null)) as { error?: string } | null;
+          throw new Error(data?.error || 'Download failed');
+        }
+        const blob = await res.blob();
+        const objectUrl = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = objectUrl;
+        a.download = `calendar-${year}-start-${startMonth}.pdf`;
+        a.click();
+        URL.revokeObjectURL(objectUrl);
+        setError(null);
+      } catch (e) {
+        if (!cancelled) {
+          setError(e instanceof Error ? e.message : 'Download failed');
+        }
+      } finally {
+        if (!cancelled) {
+          setSearchParams({}, { replace: true });
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [searchParams, setSearchParams, year, startMonth]);
+
   const fetchArchiveImage = useCallback(async (fileMeta: { name: string; path: string }) => {
     const rawUrl = `${API_URL}/api/pictures/raw?path=${encodeURIComponent(fileMeta.path)}`;
     const imgRes = await fetch(rawUrl);
@@ -216,6 +316,10 @@ export function ApplicationForm() {
     const dfs = String(cal.datesFontSize ?? '3').trim();
     setDatesFontSize(
       DATE_NUMBER_SIZE_OPTIONS.some((o) => o.value === dfs) ? dfs : '3'
+    );
+    const dnp = cal.dateNumberPosition;
+    setDateNumberPosition(
+      dnp === 'center' || dnp === 'top-center' || dnp === 'top-left' ? dnp : 'top-left'
     );
     setArchiveFolder(typeof cal.archiveFolder === 'string' ? cal.archiveFolder : '');
     setArchiveReplaceAll(Boolean(cal.archiveReplaceAll));
@@ -333,6 +437,7 @@ export function ApplicationForm() {
         weekDaysFont?: string;
         datesFont?: string;
         datesFontSize?: string;
+        dateNumberPosition?: DateNumberPosition;
         archiveFolder?: string;
         archiveReplaceAll?: boolean;
         layoutMode?: PdfLayoutMode;
@@ -352,6 +457,9 @@ export function ApplicationForm() {
       if (d.datesFont) setDatesFont(pickFont(d.datesFont, 'Arial'));
       if (d.datesFontSize && DATE_NUMBER_SIZE_OPTIONS.some((o) => o.value === d.datesFontSize)) {
         setDatesFontSize(d.datesFontSize);
+      }
+      if (d.dateNumberPosition === 'center' || d.dateNumberPosition === 'top-center' || d.dateNumberPosition === 'top-left') {
+        setDateNumberPosition(d.dateNumberPosition);
       }
       if (typeof d.archiveFolder === 'string') setArchiveFolder(d.archiveFolder);
       if (typeof d.archiveReplaceAll === 'boolean') setArchiveReplaceAll(d.archiveReplaceAll);
@@ -389,6 +497,7 @@ export function ApplicationForm() {
           weekDaysFont,
           datesFont,
           datesFontSize,
+          dateNumberPosition,
           archiveFolder,
           archiveReplaceAll,
           layoutMode,
@@ -414,6 +523,7 @@ export function ApplicationForm() {
     weekDaysFont,
     datesFont,
     datesFontSize,
+    dateNumberPosition,
     archiveFolder,
     archiveReplaceAll,
     layoutMode,
@@ -569,6 +679,7 @@ export function ApplicationForm() {
         weekDaysFont,
         datesFont,
         datesFontSize,
+        dateNumberPosition,
         archiveFolder,
         archiveReplaceAll,
         layoutMode,
@@ -636,30 +747,30 @@ export function ApplicationForm() {
       formData.append('weekDaysFont', weekDaysFont);
       formData.append('datesFont', datesFont);
       formData.append('datesFontSize', datesFontSize);
+      formData.append('dateNumberPosition', dateNumberPosition);
       formData.append('layoutMode', layoutMode);
+      formData.append('clientAppOrigin', window.location.origin);
 
       // Images: images_0..11 = January–December (cover page has title only, no photo)
       monthPhotos.forEach((mp, i) => {
         if (mp.file) formData.append(`images_${i}`, mp.file);
       });
 
-      const res = await fetch(`${API_URL}/generate`, {
+      const res = await fetch(`${API_URL}/api/checkout/calendar-session`, {
         method: 'POST',
         body: formData,
       });
 
       if (!res.ok) {
-        const text = await res.text();
-        throw new Error(text || 'Failed to generate calendar');
+        const data = (await res.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(data?.error || 'Could not start checkout');
       }
 
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `calendar-${year}-start-${startMonth}.pdf`;
-      a.click();
-      URL.revokeObjectURL(url);
+      const data = (await res.json()) as { url?: string };
+      if (!data.url) {
+        throw new Error('No checkout URL returned');
+      }
+      window.location.assign(data.url);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to generate calendar');
     } finally {
@@ -669,6 +780,47 @@ export function ApplicationForm() {
 
   return (
     <div className="min-h-screen bg-[#0b1628] text-white py-12 px-6 sm:px-10 lg:px-16">
+      {paymentSuccessModal != null && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/65 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="payment-success-title"
+        >
+          <Card className="max-w-md w-full border-slate-600 bg-[#132032] text-white shadow-xl">
+            <CardHeader>
+              <CardTitle id="payment-success-title" className="text-xl">
+                Payment successful
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4 text-slate-200">
+              {paymentSuccessModal.formattedAmount ? (
+                <p className="text-base leading-relaxed">
+                  Your card was charged{' '}
+                  <strong className="text-white text-lg font-semibold tabular-nums">
+                    {paymentSuccessModal.formattedAmount}
+                  </strong>
+                  .
+                </p>
+              ) : (
+                <p className="text-base leading-relaxed">
+                  Check your card statement or Stripe receipt email for the exact amount.
+                </p>
+              )}
+              <p className="text-sm text-slate-400">
+                Your calendar PDF should download automatically.
+              </p>
+              <Button
+                type="button"
+                className="w-full"
+                onClick={() => setPaymentSuccessModal(null)}
+              >
+                OK
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      )}
       <div className="max-w-[1200px] mx-auto">
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-8">
           <Link to="/" className="text-slate-400 hover:text-white text-sm order-2 sm:order-1">
@@ -871,24 +1023,26 @@ export function ApplicationForm() {
               <CardTitle className="text-xl">Week & Font Settings</CardTitle>
               <CardDescription className="text-base">Choose how your week starts and fonts for calendar elements</CardDescription>
             </CardHeader>
-            <CardContent className="p-0 space-y-8">
-              <div>
-                <Label className="text-base font-medium">Week starts with</Label>
-                <p className="text-sm text-slate-400 mb-3">Choose Monday or Sunday as the first day of the week</p>
-                <RadioGroup value={weekStart} onValueChange={(value) => setWeekStart(value as 'monday' | 'sunday')} className="flex gap-6">
-                  <label className="flex items-center gap-3 cursor-pointer">
-                    <RadioGroupItem value="sunday" id="sunday" className="h-5 w-5" />
-                    <span className="text-base">Sunday</span>
-                  </label>
-                  <label className="flex items-center gap-3 cursor-pointer">
-                    <RadioGroupItem value="monday" id="monday" className="h-5 w-5" />
-                    <span className="text-base">Monday</span>
-                  </label>
-                </RadioGroup>
-              </div>
+            <CardContent className="p-0">
+              <div className="grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(12.5rem,15.5rem)] lg:gap-10 lg:items-start">
+                <div className="min-w-0 space-y-8">
+                  <div>
+                    <Label className="text-base font-medium">Week starts with</Label>
+                    <p className="text-sm text-slate-400 mb-3">Choose Monday or Sunday as the first day of the week</p>
+                    <RadioGroup value={weekStart} onValueChange={(value) => setWeekStart(value as 'monday' | 'sunday')} className="flex gap-6">
+                      <label className="flex items-center gap-3 cursor-pointer">
+                        <RadioGroupItem value="sunday" id="sunday" className="h-5 w-5" />
+                        <span className="text-base">Sunday</span>
+                      </label>
+                      <label className="flex items-center gap-3 cursor-pointer">
+                        <RadioGroupItem value="monday" id="monday" className="h-5 w-5" />
+                        <span className="text-base">Monday</span>
+                      </label>
+                    </RadioGroup>
+                  </div>
 
-              <div className="border-t pt-8">
-                <Label className="text-base font-medium">Choose fonts</Label>
+                  <div className="border-t border-slate-700/80 pt-8">
+                    <Label className="text-base font-medium">Choose fonts</Label>
                 <p className="text-sm text-slate-400 mb-4">Font for year, month names, week days, and dates; date digits can be scaled separately for the PDF.</p>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                   <div className="space-y-2">
@@ -978,7 +1132,111 @@ export function ApplicationForm() {
                   <p className="text-xs text-slate-400">
                     In the PDF, size 4 sets the digit height to one quarter of each day cell; size 5 uses the full cell height (same proportions as the calendar grid).
                   </p>
+                  <div className="space-y-3 pt-2">
+                    <Label className="text-sm">Date number in cell</Label>
+                    <p className="text-xs text-slate-500">
+                      Where the day number sits inside each day cell (events stay in the lower part of the cell in the PDF).
+                    </p>
+                    <RadioGroup
+                      value={dateNumberPosition}
+                      onValueChange={(v) => setDateNumberPosition(v as DateNumberPosition)}
+                      className="flex flex-col gap-3 sm:flex-row sm:flex-wrap"
+                    >
+                      {DATE_POSITION_OPTIONS.map((opt) => (
+                        <label key={opt.value} className="flex items-center gap-2 cursor-pointer">
+                          <RadioGroupItem value={opt.value} id={`date-pos-${opt.value}`} className="h-4 w-4" />
+                          <span className="text-sm text-slate-200">{opt.label}</span>
+                        </label>
+                      ))}
+                    </RadioGroup>
+                  </div>
                 </div>
+                  </div>
+                </div>
+
+                <aside className="w-full max-w-[15.5rem] mx-auto lg:mx-0 lg:max-w-none shrink-0 lg:sticky lg:top-24">
+                  <div className="rounded-xl border border-slate-600 bg-[#0c1624] p-4 sm:p-5 shadow-inner space-y-5">
+                    <div>
+                      <p className="text-xs font-medium uppercase tracking-wide text-slate-500 mb-2">
+                        Year & month (PDF)
+                      </p>
+                      <p
+                        className="text-xl text-slate-100 tabular-nums leading-tight"
+                        style={{ fontFamily: yearFont }}
+                      >
+                        {year}
+                      </p>
+                      <p
+                        className="text-base text-slate-100 mt-1 leading-snug"
+                        style={{ fontFamily: monthFont }}
+                      >
+                        {MONTHS[Math.min(11, Math.max(0, (parseInt(startMonth, 10) || 1) - 1))]} {year}
+                      </p>
+                      <p className="text-[11px] text-slate-500 mt-2 leading-snug">
+                        <strong className="text-slate-400">Year font</strong> sample above; <strong className="text-slate-400">Month font</strong> matches the month title line in the PDF (e.g. “January 2026”).
+                      </p>
+                    </div>
+                    <div className="border-t border-slate-700/80 pt-4">
+                      <p className="text-sm font-medium text-slate-200 mb-0.5">
+                        Day cell preview
+                      </p>
+                      <p className="text-xs text-slate-500 mb-3 leading-snug">
+                        Weekday row + one day cell (dates font, size, and position). On-screen preview is approximate.
+                      </p>
+                      <div
+                        className="mx-auto flex w-[7.25rem] flex-col overflow-hidden rounded-md border border-slate-500 bg-[#152238] shadow-lg"
+                        aria-hidden
+                      >
+                        <div
+                          className="border-b border-slate-600 bg-slate-800/95 px-2 py-2.5 text-center text-slate-100 leading-none shrink-0"
+                          style={{
+                            fontFamily: weekDaysFont,
+                            fontSize: '0.8125rem',
+                            fontWeight: 600,
+                            letterSpacing: '0.02em',
+                          }}
+                        >
+                          {weekStart === 'monday' ? 'Mon' : 'Sun'}
+                        </div>
+                        <div
+                          className="flex min-h-0 flex-1 flex-col px-1 pb-1 pt-1"
+                          style={{
+                            minHeight: DATE_CELL_PREVIEW_MIN_HEIGHT[datesFontSize] ?? '4.25rem',
+                          }}
+                        >
+                          <div
+                            className={
+                              dateNumberPosition === 'top-left'
+                                ? 'flex w-full shrink-0 items-start justify-start'
+                                : dateNumberPosition === 'top-center'
+                                  ? 'flex w-full shrink-0 items-start justify-center'
+                                  : 'flex w-full min-h-0 flex-1 items-center justify-center'
+                            }
+                          >
+                            <span
+                              className="tabular-nums text-white"
+                              style={{
+                                fontFamily: datesFont,
+                                fontSize:
+                                  DATE_NUMBER_SIZE_OPTIONS.find((o) => o.value === datesFontSize)?.previewPx ?? 17,
+                                lineHeight: 1,
+                              }}
+                            >
+                              15
+                            </span>
+                          </div>
+                          <p className="mt-auto truncate border-t border-slate-600/60 pt-1 text-center text-[8px] leading-tight text-slate-400">
+                            Sample event
+                          </p>
+                        </div>
+                      </div>
+                      <p className="text-xs text-slate-500 mt-3 text-center leading-snug">
+                        First grid column: <strong className="text-slate-400">{weekStart === 'monday' ? 'Monday' : 'Sunday'}</strong>
+                        {' '}({weekStart === 'monday' ? 'Mon' : 'Sun'}).
+                      </p>
+                    </div>
+                  </div>
+                </aside>
               </div>
             </CardContent>
           </Card>
@@ -1244,7 +1502,7 @@ export function ApplicationForm() {
           {/* Submit Button */}
           <div className="flex justify-end">
             <Button type="submit" className="min-w-[180px] h-12 text-lg" disabled={isSubmitting}>
-              {isSubmitting ? 'Creating…' : 'Create Calendar'}
+              {isSubmitting ? 'Redirecting…' : 'Pay & download PDF'}
             </Button>
           </div>
         </form>

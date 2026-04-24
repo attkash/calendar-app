@@ -1,11 +1,76 @@
+require("dotenv").config();
+
 const express = require("express");
 const multer = require("multer");
 const puppeteer = require("puppeteer");
 const fs = require("fs");
 const path = require("path");
+const crypto = require("crypto");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const dataStore = require("./dataStore");
+
+const Stripe = require("stripe");
+const STRIPE_PRODUCT_ID =
+  process.env.STRIPE_PRODUCT_ID || "prod_UNuV4YPPSlaqD0";
+const STRIPE_UNIT_AMOUNT_CENTS = Number.parseInt(
+  process.env.STRIPE_UNIT_AMOUNT_CENTS || "50",
+  10
+);
+const STRIPE_CURRENCY = (process.env.STRIPE_CURRENCY || "usd").toLowerCase();
+const PUBLIC_APP_URL = (
+  process.env.PUBLIC_APP_URL || "http://localhost:5173"
+).replace(/\/$/, "");
+
+/**
+ * Checkout success/cancel URLs must match the site the user opened. Defaults to
+ * PUBLIC_APP_URL; optional body field clientAppOrigin (window.location.origin)
+ * is used when it is localhost/127.0.0.1, matches PUBLIC_APP_URL, or matches
+ * STRIPE_ALLOWED_RETURN_ORIGINS (comma-separated full origins, e.g. https://www.example.com).
+ */
+function pickCheckoutReturnBase(clientOriginRaw) {
+  const fallback = PUBLIC_APP_URL;
+  const raw = String(clientOriginRaw || "").trim();
+  if (!raw) return fallback;
+  let u;
+  try {
+    u = new URL(raw);
+  } catch {
+    return fallback;
+  }
+  if (u.protocol !== "http:" && u.protocol !== "https:") return fallback;
+  const origin = `${u.protocol}//${u.host}`.replace(/\/$/, "");
+  const hn = u.hostname.toLowerCase();
+  if (hn === "localhost" || hn === "127.0.0.1") return origin;
+
+  let pub;
+  try {
+    pub = new URL(fallback);
+  } catch {
+    return fallback;
+  }
+  if (origin === `${pub.protocol}//${pub.host}`) return origin;
+
+  const extras = String(process.env.STRIPE_ALLOWED_RETURN_ORIGINS || "")
+    .split(",")
+    .map((s) => s.trim().replace(/\/$/, ""))
+    .filter(Boolean);
+  for (const ex of extras) {
+    try {
+      const eu = new URL(ex);
+      if (origin === `${eu.protocol}//${eu.host}`) return origin;
+    } catch {
+      /* ignore */
+    }
+  }
+  return fallback;
+}
+
+function getStripe() {
+  const key = process.env.STRIPE_SECRET_KEY;
+  if (!key) return null;
+  return new Stripe(key);
+}
 
 const JWT_SECRET = process.env.JWT_SECRET || "calendar-dev-secret-change-me";
 const JWT_EXPIRES = "30d";
@@ -44,6 +109,7 @@ function publicCalendar(c) {
     weekDaysFont: c.weekDaysFont,
     datesFont: c.datesFont,
     datesFontSize: c.datesFontSize,
+    dateNumberPosition: c.dateNumberPosition || "top-left",
     archiveFolder: c.archiveFolder,
     archiveReplaceAll: c.archiveReplaceAll,
     layoutMode: c.layoutMode || "landscape-spread",
@@ -62,6 +128,39 @@ if (!fs.existsSync(UPLOADS_DIR)) {
 }
 const upload = multer({ dest: UPLOADS_DIR });
 
+const ENTITLEMENTS_DIR = path.join(UPLOADS_DIR, "entitlements");
+if (!fs.existsSync(ENTITLEMENTS_DIR)) {
+  fs.mkdirSync(ENTITLEMENTS_DIR, { recursive: true });
+}
+
+const calendarEntitlementUpload = multer({
+  storage: multer.diskStorage({
+    destination: (req, _file, cb) => {
+      const id = req.calendarEntitlementId;
+      if (!id) {
+        return cb(new Error("Missing calendarEntitlementId"));
+      }
+      const dir = path.join(ENTITLEMENTS_DIR, id);
+      fs.mkdirSync(dir, { recursive: true });
+      cb(null, dir);
+    },
+    filename: (_req, file, cb) => {
+      const ext = path.extname(file.originalname || "") || ".bin";
+      cb(null, `${file.fieldname}${ext}`);
+    },
+  }),
+});
+
+function assignCalendarEntitlementId(req, _res, next) {
+  req.calendarEntitlementId = crypto.randomUUID();
+  next();
+}
+
+const calendarImageFields = Array.from({ length: 12 }, (_, i) => ({
+  name: `images_${i}`,
+  maxCount: 1,
+}));
+
 const PICTURES_DIR = path.join(__dirname, "Pictures");
 const IMAGE_EXT = new Set([".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp"]);
 
@@ -78,6 +177,13 @@ const DATE_NUMBER_FONT_MM = {
 function parseDateNumberSize(body) {
   const n = parseInt(body.datesFontSize, 10);
   return n >= 1 && n <= 5 ? n : 3;
+}
+
+/** Day-cell placement for the date digit in the PDF grid. */
+function normalizeDateNumberPosition(raw) {
+  const v = String(raw || "").trim();
+  if (v === "center" || v === "top-center" || v === "top-left") return v;
+  return "top-left";
 }
 
 function resolveUnderPictures(rel) {
@@ -117,6 +223,37 @@ app.get("/api/pictures/folders", (req, res) => {
     res.status(500).json({ error: "Folders list failed" });
   }
 });
+
+app.post(
+  "/webhooks/stripe",
+  express.raw({ type: "application/json" }),
+  (req, res) => {
+    const stripe = getStripe();
+    const whSecret = process.env.STRIPE_WEBHOOK_SECRET;
+    if (!stripe || !whSecret) {
+      return res.status(503).send("Stripe webhook not configured");
+    }
+    let event;
+    try {
+      event = stripe.webhooks.constructEvent(
+        req.body,
+        req.headers["stripe-signature"],
+        whSecret
+      );
+    } catch (err) {
+      console.error("Stripe webhook signature:", err.message);
+      return res.status(400).send(`Webhook Error: ${err.message}`);
+    }
+    if (event.type === "checkout.session.completed") {
+      const session = event.data.object;
+      const eid = session.metadata && session.metadata.entitlement_id;
+      if (eid) {
+        dataStore.markDownloadEntitlementPaid(eid, session.id);
+      }
+    }
+    res.json({ received: true });
+  }
+);
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -354,126 +491,144 @@ function getPhotoMarkup(images, index, layoutMode) {
   return `<div class="${phClass}" role="img" aria-label="No photo">No photo</div>`;
 }
 
-app.post("/generate", upload.any(), async (req, res) => {
-  try {
-    const year = parseInt(req.body.year, 10);
-    const startYear = Number.isFinite(year) ? year : new Date().getFullYear();
-    let startMonth = parseInt(req.body.startMonth, 10);
-    if (!Number.isFinite(startMonth) || startMonth < 1 || startMonth > 12) {
-      startMonth = 1;
-    }
-    const weekStart = req.body.weekStart || "sunday";
-    const layoutMode =
-      req.body.layoutMode === "portrait-single"
-        ? "portrait-single"
-        : "landscape-spread";
-    const bodyClass =
-      layoutMode === "portrait-single"
-        ? "pdf-layout-portrait-single"
-        : "pdf-layout-landscape-spread";
-    const monthFont = req.body.monthFont || "Arial";
-    const weekDaysFont = req.body.weekDaysFont || "Arial";
-    const datesFont = req.body.datesFont || "Arial";
-    const dateNumberSize = parseDateNumberSize(req.body);
-    const dateNumberMm = DATE_NUMBER_FONT_MM[dateNumberSize];
-    const rawFiles = req.files || [];
-    const images = [];
-    for (let i = 0; i < 12; i++) {
-      const f = rawFiles.find((x) => x.fieldname === `images_${i}`);
-      images[i] = f || null;
-    }
-    const eventsInput = JSON.parse(req.body.events || "[]");
-    const eventsByMonthDay = {};
+/**
+ * @param {Record<string, unknown>} body
+ * @param {import("multer").File[]} rawFiles
+ * @returns {Promise<Buffer>}
+ */
+async function generateCalendarPdfBuffer(body, rawFiles) {
+  const year = parseInt(body.year, 10);
+  const startYear = Number.isFinite(year) ? year : new Date().getFullYear();
+  let startMonth = parseInt(body.startMonth, 10);
+  if (!Number.isFinite(startMonth) || startMonth < 1 || startMonth > 12) {
+    startMonth = 1;
+  }
+  const weekStart = body.weekStart || "sunday";
+  const layoutMode =
+    body.layoutMode === "portrait-single"
+      ? "portrait-single"
+      : "landscape-spread";
+  const bodyClass =
+    layoutMode === "portrait-single"
+      ? "pdf-layout-portrait-single"
+      : "pdf-layout-landscape-spread";
+  const monthFont = body.monthFont || "Arial";
+  const weekDaysFont = body.weekDaysFont || "Arial";
+  const datesFont = body.datesFont || "Arial";
+  const dateNumberSize = parseDateNumberSize(body);
+  const dateNumberMm = DATE_NUMBER_FONT_MM[dateNumberSize];
+  const dateNumberPosition = normalizeDateNumberPosition(body.dateNumberPosition);
+  const datePosClass = `date-pos-${dateNumberPosition}`;
+  const images = [];
+  for (let i = 0; i < 12; i++) {
+    const f = rawFiles.find((x) => x.fieldname === `images_${i}`);
+    images[i] = f || null;
+  }
+  const eventsInput = JSON.parse(body.events || "[]");
+  const eventsByMonthDay = {};
 
-    (Array.isArray(eventsInput) ? eventsInput : []).forEach((ev) => {
-      if (ev && ev.date && ev.occasion) {
-        const [y, m, d] = String(ev.date).split("-");
-        if (m && d) {
-          const key = `${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
-          if (!eventsByMonthDay[key]) eventsByMonthDay[key] = [];
-          eventsByMonthDay[key].push({ date: ev.date, occasion: ev.occasion });
-        }
+  (Array.isArray(eventsInput) ? eventsInput : []).forEach((ev) => {
+    if (ev && ev.date && ev.occasion) {
+      const [y, m, d] = String(ev.date).split("-");
+      if (m && d) {
+        const key = `${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
+        if (!eventsByMonthDay[key]) eventsByMonthDay[key] = [];
+        eventsByMonthDay[key].push({ date: ev.date, occasion: ev.occasion });
       }
-    });
+    }
+  });
 
+  const template = fs.readFileSync(TEMPLATE_PATH, "utf-8");
 
-    const template = fs.readFileSync(TEMPLATE_PATH, "utf-8");
+  const monthNames = [
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
+  ];
 
-    const monthNames = [
-      "January","February","March","April","May","June",
-      "July","August","September","October","November","December"
-    ];
+  let monthsHtml = "";
 
-    let monthsHtml = "";
-
-    const weekDayNames = weekStart === "monday"
+  const weekDayNames =
+    weekStart === "monday"
       ? ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
       : ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
-    for (let k = 0; k < 12; k++) {
-      const offset = startMonth - 1 + k;
-      const monthIndex = offset % 12;
-      const pageYear = startYear + Math.floor(offset / 12);
-      const days = generateCalendar(pageYear, monthIndex, weekStart);
+  for (let k = 0; k < 12; k++) {
+    const offset = startMonth - 1 + k;
+    const monthIndex = offset % 12;
+    const pageYear = startYear + Math.floor(offset / 12);
+    const days = generateCalendar(pageYear, monthIndex, weekStart);
 
-      let grid = weekDayNames
-        .map((name, col) => {
-          const wk = isWeekendColumn(col, weekStart);
-          const cls = wk ? "cell cell-header cell-header--weekend" : "cell cell-header";
-          return `<div class="${cls}" style="font-family: ${weekDaysFont}, sans-serif">${name}</div>`;
-        })
-        .join("");
-
-      days.forEach((day, i) => {
-        const col = i % 7;
+    let grid = weekDayNames
+      .map((name, col) => {
         const wk = isWeekendColumn(col, weekStart);
-        const cellCls = wk ? "cell cell--weekend" : "cell";
-        let eventHtml = "";
-        if (day !== "") {
-          const monthDayKey = `${String(monthIndex + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-          const dayEvents = eventsByMonthDay[monthDayKey] || [];
-          const lines = [];
-          dayEvents.forEach((e) => {
-            const y = String(e.date).split("-")[0];
-            const parts = String(e.occasion || "")
-              .split(/\s*;\s*/)
-              .map((s) => s.trim())
-              .filter(Boolean);
-            parts.forEach((chunk) => {
-              const line = y ? `${chunk} (${y})` : chunk;
-              lines.push(escapeHtml(line));
-            });
-          });
-          // <br> prints reliably in PDF; flex stacks did not always break lines
-          eventHtml = lines.join("<br />");
-        }
+        const cls = wk
+          ? "cell cell-header cell-header--weekend"
+          : "cell cell-header";
+        return `<div class="${cls}" style="font-family: ${weekDaysFont}, sans-serif">${name}</div>`;
+      })
+      .join("");
 
-        grid += `
+    days.forEach((day, i) => {
+      const col = i % 7;
+      const wk = isWeekendColumn(col, weekStart);
+      const cellCls = `${wk ? "cell cell--weekend" : "cell"} ${datePosClass}`;
+      let eventHtml = "";
+      if (day !== "") {
+        const monthDayKey = `${String(monthIndex + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+        const dayEvents = eventsByMonthDay[monthDayKey] || [];
+        const lines = [];
+        dayEvents.forEach((e) => {
+          const y = String(e.date).split("-")[0];
+          const parts = String(e.occasion || "")
+            .split(/\s*;\s*/)
+            .map((s) => s.trim())
+            .filter(Boolean);
+          parts.forEach((chunk) => {
+            const line = y ? `${chunk} (${y})` : chunk;
+            lines.push(escapeHtml(line));
+          });
+        });
+        eventHtml = lines.join("<br />");
+      }
+
+      grid += `
           <div class="${cellCls}" style="font-family: ${datesFont}, sans-serif">
-            <div class="date" style="font-size: ${dateNumberMm}mm; font-family: ${datesFont}, sans-serif">${day || ""}</div>
+            <div class="cell-day-top">
+              <div class="date" style="font-size: ${dateNumberMm}mm; font-family: ${datesFont}, sans-serif">${day || ""}</div>
+            </div>
             <div class="event">${eventHtml}</div>
           </div>
         `;
-      });
+    });
 
-      if (layoutMode === "portrait-single") {
-        const combinedClass =
-          dateNumberSize === 5
-            ? "page page--month-combined page--date-size-5-combined"
-            : "page page--month-combined";
-        monthsHtml += `
+    if (layoutMode === "portrait-single") {
+      const combinedClass =
+        dateNumberSize === 5
+          ? "page page--month-combined page--date-size-5-combined"
+          : "page page--month-combined";
+      monthsHtml += `
         <div class="${combinedClass}">
           <h2 class="month-combined-title" style="font-family: ${monthFont}, serif">${monthNames[monthIndex]} ${pageYear}</h2>
           <div class="month-combined-photo">${getPhotoMarkup(images, monthIndex, layoutMode)}</div>
           <div class="grid">${grid}</div>
         </div>
       `;
-      } else {
-        const calendarPageClass =
-          dateNumberSize === 5
-            ? "page page--month-calendar page--date-size-5"
-            : "page page--month-calendar";
-        monthsHtml += `
+    } else {
+      const calendarPageClass =
+        dateNumberSize === 5
+          ? "page page--month-calendar page--date-size-5"
+          : "page page--month-calendar";
+      monthsHtml += `
         <div class="page page--month-photo">
           <div class="month-photo-area">${getPhotoMarkup(images, monthIndex, layoutMode)}</div>
           <h2 class="month-spread-title" style="font-family: ${monthFont}, serif">${monthNames[monthIndex]} ${pageYear}</h2>
@@ -482,38 +637,227 @@ app.post("/generate", upload.any(), async (req, res) => {
           <div class="grid">${grid}</div>
         </div>
       `;
+    }
+  }
+
+  const finalHtml = template
+    .replace("{{bodyClass}}", bodyClass)
+    .replace("{{content}}", monthsHtml);
+
+  const browser = await puppeteer.launch({
+    args: ["--no-sandbox", "--disable-setuid-sandbox"],
+  });
+
+  const page = await browser.newPage();
+
+  await page.setContent(finalHtml, { waitUntil: "load", timeout: 30000 });
+
+  const pdfBuffer = await page.pdf({
+    format: "A4",
+    landscape: layoutMode === "landscape-spread",
+    printBackground: true,
+  });
+
+  await browser.close();
+
+  return pdfBuffer;
+}
+
+app.post("/generate", upload.any(), async (_req, res) => {
+  res.status(403).json({
+    error:
+      "Direct PDF generation is disabled. Complete checkout to download your calendar.",
+  });
+});
+
+app.post(
+  "/api/checkout/calendar-session",
+  assignCalendarEntitlementId,
+  calendarEntitlementUpload.fields(calendarImageFields),
+  async (req, res) => {
+    const stripe = getStripe();
+    if (!stripe) {
+      return res.status(503).json({
+        error:
+          "Stripe secret key is missing. Set STRIPE_SECRET_KEY in the environment or in a root .env file (see Stripe Dashboard → Developers → API keys).",
+      });
+    }
+    try {
+      const entitlementId = req.calendarEntitlementId;
+      const filesObj = req.files || {};
+      const imageFilenames = [];
+      for (let i = 0; i < 12; i++) {
+        const arr = filesObj[`images_${i}`];
+        const f = Array.isArray(arr) && arr[0] ? arr[0] : null;
+        imageFilenames[i] = f ? path.basename(f.path) : null;
+      }
+
+      const payload = {
+        year: req.body.year,
+        startMonth: req.body.startMonth,
+        weekStart: req.body.weekStart,
+        layoutMode: req.body.layoutMode,
+        monthFont: req.body.monthFont,
+        weekDaysFont: req.body.weekDaysFont,
+        datesFont: req.body.datesFont,
+        datesFontSize: req.body.datesFontSize,
+        dateNumberPosition: normalizeDateNumberPosition(req.body.dateNumberPosition),
+        events: req.body.events || "[]",
+      };
+
+      dataStore.createDownloadEntitlement({
+        id: entitlementId,
+        payload,
+        imageFilenames,
+      });
+
+      const returnBase = pickCheckoutReturnBase(req.body.clientAppOrigin);
+      const session = await stripe.checkout.sessions.create({
+        mode: "payment",
+        line_items: [
+          {
+            price_data: {
+              currency: STRIPE_CURRENCY,
+              product: STRIPE_PRODUCT_ID,
+              unit_amount: STRIPE_UNIT_AMOUNT_CENTS,
+            },
+            quantity: 1,
+          },
+        ],
+        metadata: { entitlement_id: entitlementId },
+        success_url: `${returnBase}/calendar?checkout=success&entitlement_id=${encodeURIComponent(entitlementId)}&session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${returnBase}/calendar?checkout=cancel`,
+      });
+
+      return res.json({ url: session.url, entitlementId });
+    } catch (err) {
+      console.error("Checkout session error:", err.message);
+      return res.status(500).json({ error: "Could not start checkout" });
+    }
+  }
+);
+
+/** Paid-session summary for UI after Checkout redirect (does not consume download). */
+app.get("/api/calendar/checkout-summary", async (req, res) => {
+  const stripe = getStripe();
+  if (!stripe) {
+    return res.status(503).json({
+      error:
+        "Stripe secret key is missing. Set STRIPE_SECRET_KEY in the environment or in a root .env file (see Stripe Dashboard → Developers → API keys).",
+    });
+  }
+  const sessionId = req.query.session_id;
+  const entitlementId = req.query.entitlement_id;
+  if (
+    typeof sessionId !== "string" ||
+    typeof entitlementId !== "string" ||
+    !sessionId ||
+    !entitlementId
+  ) {
+    return res.status(400).json({ error: "Missing session_id or entitlement_id" });
+  }
+
+  try {
+    const session = await stripe.checkout.sessions.retrieve(sessionId);
+    if (session.payment_status !== "paid") {
+      return res.status(402).json({ error: "Payment not completed" });
+    }
+    const metaEid = session.metadata && session.metadata.entitlement_id;
+    if (metaEid !== entitlementId) {
+      return res.status(403).json({ error: "Session does not match entitlement" });
+    }
+    const amountTotal =
+      typeof session.amount_total === "number" ? session.amount_total : null;
+    const currency =
+      typeof session.currency === "string" ? session.currency : "usd";
+    return res.json({ amountTotal, currency });
+  } catch (err) {
+    console.error("Checkout summary error:", err.message);
+    return res.status(500).json({ error: "Could not load payment summary" });
+  }
+});
+
+app.get("/api/calendar/download", async (req, res) => {
+  const stripe = getStripe();
+  if (!stripe) {
+    return res.status(503).json({
+      error:
+        "Stripe secret key is missing. Set STRIPE_SECRET_KEY in the environment or in a root .env file (see Stripe Dashboard → Developers → API keys).",
+    });
+  }
+  const sessionId = req.query.session_id;
+  const entitlementId = req.query.entitlement_id;
+  if (
+    typeof sessionId !== "string" ||
+    typeof entitlementId !== "string" ||
+    !sessionId ||
+    !entitlementId
+  ) {
+    return res.status(400).json({ error: "Missing session_id or entitlement_id" });
+  }
+
+  try {
+    const session = await stripe.checkout.sessions.retrieve(sessionId);
+    if (session.payment_status !== "paid") {
+      return res.status(402).json({ error: "Payment not completed" });
+    }
+    const metaEid =
+      session.metadata && session.metadata.entitlement_id;
+    if (metaEid !== entitlementId) {
+      return res.status(403).json({ error: "Session does not match entitlement" });
+    }
+
+    const ent = dataStore.getDownloadEntitlement(entitlementId);
+    if (!ent) {
+      return res.status(404).json({ error: "Entitlement not found" });
+    }
+    if (ent.consumedAt) {
+      return res.status(410).json({ error: "Download already used" });
+    }
+
+    if (!ent.paid) {
+      dataStore.markDownloadEntitlementPaid(entitlementId, sessionId);
+    }
+
+    const entDir = path.join(ENTITLEMENTS_DIR, entitlementId);
+    const rawFiles = [];
+    for (let i = 0; i < 12; i++) {
+      const fn = ent.imageFilenames[i];
+      if (fn) {
+        const full = path.join(entDir, fn);
+        if (fs.existsSync(full)) {
+          rawFiles.push({
+            fieldname: `images_${i}`,
+            path: full,
+            originalname: fn,
+            mimetype: guessMime(fn),
+          });
+        }
       }
     }
 
-    const finalHtml = template
-      .replace("{{bodyClass}}", bodyClass)
-      .replace("{{content}}", monthsHtml);
+    const pdfBuffer = await generateCalendarPdfBuffer(ent.payload, rawFiles);
 
-    const browser = await puppeteer.launch({
-      args: ["--no-sandbox", "--disable-setuid-sandbox"]
-    });
+    dataStore.markDownloadEntitlementConsumed(entitlementId);
 
-    const page = await browser.newPage();
+    if (fs.existsSync(entDir)) {
+      try {
+        fs.rmSync(entDir, { recursive: true, force: true });
+      } catch (e) {
+        console.error("Entitlement cleanup:", e.message);
+      }
+    }
 
-    await page.setContent(finalHtml, { waitUntil: "load", timeout: 30000 });
-
-    const pdfPath = path.join(__dirname, `calendar-${Date.now()}.pdf`);
-
-    await page.pdf({
-      path: pdfPath,
-      format: "A4",
-      landscape: layoutMode === "landscape-spread",
-      printBackground: true,
-    });
-
-    await browser.close();
-
-    res.download(pdfPath);
-
-  } catch (error) {
-    console.error("Calendar error:", error.message);
-    console.error(error.stack);
-    res.status(500).send("Error generating calendar: " + error.message);
+    const filename = `calendar-${entitlementId.slice(0, 8)}.pdf`;
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="${filename}"`
+    );
+    return res.send(pdfBuffer);
+  } catch (err) {
+    console.error("Download error:", err.message);
+    return res.status(500).json({ error: "Could not generate download" });
   }
 });
 

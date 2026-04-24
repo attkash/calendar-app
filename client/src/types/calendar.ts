@@ -6,6 +6,9 @@ export interface SavedCalendarEvent {
 /** One A4 portrait page per month vs photo + grid on two A4 landscape pages */
 export type PdfLayoutMode = 'portrait-single' | 'landscape-spread';
 
+/** Where the day number sits inside each day cell in the PDF grid */
+export type DateNumberPosition = 'top-left' | 'top-center' | 'center';
+
 export interface SavedCalendarFull {
   id: string;
   name: string;
@@ -17,6 +20,7 @@ export interface SavedCalendarFull {
   weekDaysFont: string;
   datesFont: string;
   datesFontSize: string;
+  dateNumberPosition?: DateNumberPosition;
   archiveFolder: string;
   archiveReplaceAll: boolean;
   layoutMode: PdfLayoutMode;

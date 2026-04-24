@@ -23,7 +23,7 @@
       "datesFontSize": "5",
       "archiveFolder": "calendar ginea pigs graphic",
       "archiveReplaceAll": true,
-      "layoutMode": "portrait-single",
+      "layoutMode": "landscape-spread",
       "events": [
         {
           "date": "2003-02-12",
@@ -36,10 +36,497 @@
         {
           "date": "1969-11-24",
           "occasion": "Amy"
+        },
+        {
+          "date": "1973-11-15",
+          "occasion": "Marat"
         }
       ],
-      "updatedAt": "2026-04-22T00:19:48.833Z",
+      "updatedAt": "2026-04-24T02:05:33.849Z",
       "createdAt": "2026-04-16T01:44:01.870Z"
+    }
+  ],
+  "downloadEntitlements": [
+    {
+      "id": "0e767bc5-657d-4934-ad79-38551da16df8",
+      "payload": {
+        "year": "2026",
+        "startMonth": "1",
+        "weekStart": "monday",
+        "layoutMode": "portrait-single",
+        "monthFont": "Arial",
+        "weekDaysFont": "Arial",
+        "datesFont": "Arial",
+        "datesFontSize": "5",
+        "events": "[{\"date\":\"2003-02-12\",\"occasion\":\"Amanzhol\"},{\"date\":\"2009-04-14\",\"occasion\":\"Kuralai\"},{\"date\":\"1969-11-24\",\"occasion\":\"Amy\"}]"
+      },
+      "imageFilenames": [
+        "images_0.png",
+        "images_1.png",
+        "images_2.png",
+        "images_3.png",
+        "images_4.png",
+        "images_5.png",
+        "images_6.png",
+        "images_7.png",
+        "images_8.png",
+        "images_9.png",
+        "images_10.png",
+        "images_11.png"
+      ],
+      "paid": false,
+      "stripeSessionId": null,
+      "consumedAt": null,
+      "createdAt": "2026-04-23T02:58:13.751Z"
+    },
+    {
+      "id": "fd3eb1e9-bb23-41d8-9424-6cfc1d44fd5d",
+      "payload": {
+        "year": "2026",
+        "startMonth": "1",
+        "weekStart": "monday",
+        "layoutMode": "portrait-single",
+        "monthFont": "Arial",
+        "weekDaysFont": "Arial",
+        "datesFont": "Arial",
+        "datesFontSize": "5",
+        "events": "[{\"date\":\"2003-02-12\",\"occasion\":\"Amanzhol\"},{\"date\":\"2009-04-14\",\"occasion\":\"Kuralai\"},{\"date\":\"1969-11-24\",\"occasion\":\"Amy\"}]"
+      },
+      "imageFilenames": [
+        "images_0.png",
+        "images_1.png",
+        "images_2.png",
+        "images_3.png",
+        "images_4.png",
+        "images_5.png",
+        "images_6.png",
+        "images_7.png",
+        "images_8.png",
+        "images_9.png",
+        "images_10.png",
+        "images_11.png"
+      ],
+      "paid": false,
+      "stripeSessionId": null,
+      "consumedAt": null,
+      "createdAt": "2026-04-23T03:02:56.581Z"
+    },
+    {
+      "id": "3203443e-1c63-4a3b-8160-d677580d0d8f",
+      "payload": {
+        "year": "2026",
+        "startMonth": "1",
+        "weekStart": "monday",
+        "layoutMode": "portrait-single",
+        "monthFont": "Arial",
+        "weekDaysFont": "Arial",
+        "datesFont": "Arial",
+        "datesFontSize": "5",
+        "events": "[{\"date\":\"2003-02-12\",\"occasion\":\"Amanzhol\"},{\"date\":\"2009-04-14\",\"occasion\":\"Kuralai\"},{\"date\":\"1969-11-24\",\"occasion\":\"Amy\"}]"
+      },
+      "imageFilenames": [
+        "images_0.png",
+        "images_1.png",
+        "images_2.png",
+        "images_3.png",
+        "images_4.png",
+        "images_5.png",
+        "images_6.png",
+        "images_7.png",
+        "images_8.png",
+        "images_9.png",
+        "images_10.png",
+        "images_11.png"
+      ],
+      "paid": false,
+      "stripeSessionId": null,
+      "consumedAt": null,
+      "createdAt": "2026-04-23T03:25:03.529Z"
+    },
+    {
+      "id": "94b7a847-71b4-42f6-a495-a99f989c46ea",
+      "payload": {
+        "year": "2026",
+        "startMonth": "1",
+        "weekStart": "monday",
+        "layoutMode": "landscape-spread",
+        "monthFont": "Arial",
+        "weekDaysFont": "Arial",
+        "datesFont": "Arial",
+        "datesFontSize": "5",
+        "events": "[{\"date\":\"2003-02-12\",\"occasion\":\"Amanzhol\"},{\"date\":\"2009-04-14\",\"occasion\":\"Kuralai\"},{\"date\":\"1969-11-24\",\"occasion\":\"Amy\"}]"
+      },
+      "imageFilenames": [
+        "images_0.png",
+        "images_1.png",
+        "images_2.png",
+        "images_3.png",
+        "images_4.png",
+        "images_5.png",
+        "images_6.png",
+        "images_7.png",
+        "images_8.png",
+        "images_9.png",
+        "images_10.png",
+        "images_11.png"
+      ],
+      "paid": false,
+      "stripeSessionId": null,
+      "consumedAt": null,
+      "createdAt": "2026-04-23T03:36:38.860Z"
+    },
+    {
+      "id": "e1aa4549-3fcb-479a-8572-263877f9f85b",
+      "payload": {
+        "year": "2026",
+        "startMonth": "1",
+        "weekStart": "monday",
+        "layoutMode": "portrait-single",
+        "monthFont": "Arial",
+        "weekDaysFont": "Arial",
+        "datesFont": "Arial",
+        "datesFontSize": "5",
+        "events": "[{\"date\":\"2003-02-12\",\"occasion\":\"Amanzhol\"},{\"date\":\"2009-04-14\",\"occasion\":\"Kuralai\"},{\"date\":\"1969-11-24\",\"occasion\":\"Amy\"}]"
+      },
+      "imageFilenames": [
+        "images_0.png",
+        "images_1.png",
+        "images_2.png",
+        "images_3.png",
+        "images_4.png",
+        "images_5.png",
+        "images_6.png",
+        "images_7.png",
+        "images_8.png",
+        "images_9.png",
+        "images_10.png",
+        "images_11.png"
+      ],
+      "paid": false,
+      "stripeSessionId": null,
+      "consumedAt": null,
+      "createdAt": "2026-04-23T03:37:07.262Z"
+    },
+    {
+      "id": "ab109e57-4cdb-4152-b83c-6ca36e15eb64",
+      "payload": {
+        "year": "2026",
+        "startMonth": "1",
+        "weekStart": "monday",
+        "layoutMode": "portrait-single",
+        "monthFont": "Arial",
+        "weekDaysFont": "Arial",
+        "datesFont": "Arial",
+        "datesFontSize": "5",
+        "events": "[{\"date\":\"2003-02-12\",\"occasion\":\"Amanzhol\"},{\"date\":\"2009-04-14\",\"occasion\":\"Kuralai\"},{\"date\":\"1969-11-24\",\"occasion\":\"Amy\"}]"
+      },
+      "imageFilenames": [
+        "images_0.png",
+        "images_1.png",
+        "images_2.png",
+        "images_3.png",
+        "images_4.png",
+        "images_5.png",
+        "images_6.png",
+        "images_7.png",
+        "images_8.png",
+        "images_9.png",
+        "images_10.png",
+        "images_11.png"
+      ],
+      "paid": false,
+      "stripeSessionId": null,
+      "consumedAt": null,
+      "createdAt": "2026-04-23T03:38:41.177Z"
+    },
+    {
+      "id": "7a6ea2ac-10d7-48dd-b23a-301c2f52c373",
+      "payload": {
+        "year": "2026",
+        "startMonth": "1",
+        "weekStart": "monday",
+        "layoutMode": "landscape-spread",
+        "monthFont": "Arial",
+        "weekDaysFont": "Arial",
+        "datesFont": "Arial",
+        "datesFontSize": "5",
+        "events": "[{\"date\":\"2003-02-12\",\"occasion\":\"Amanzhol\"},{\"date\":\"2009-04-14\",\"occasion\":\"Kuralai\"},{\"date\":\"1969-11-24\",\"occasion\":\"Amy\"}]"
+      },
+      "imageFilenames": [
+        "images_0.png",
+        "images_1.png",
+        "images_2.png",
+        "images_3.png",
+        "images_4.png",
+        "images_5.png",
+        "images_6.png",
+        "images_7.png",
+        "images_8.png",
+        "images_9.png",
+        "images_10.png",
+        "images_11.png"
+      ],
+      "paid": false,
+      "stripeSessionId": null,
+      "consumedAt": null,
+      "createdAt": "2026-04-23T03:40:43.635Z"
+    },
+    {
+      "id": "9b5d234f-c641-4d61-badd-2848d4303f75",
+      "payload": {
+        "year": "2026",
+        "startMonth": "1",
+        "weekStart": "monday",
+        "layoutMode": "portrait-single",
+        "monthFont": "Arial",
+        "weekDaysFont": "Arial",
+        "datesFont": "Arial",
+        "datesFontSize": "2",
+        "events": "[{\"date\":\"2003-02-12\",\"occasion\":\"Amanzhol\"},{\"date\":\"2009-04-14\",\"occasion\":\"Kuralai\"},{\"date\":\"1969-11-24\",\"occasion\":\"Amy\"}]"
+      },
+      "imageFilenames": [
+        "images_0.png",
+        "images_1.png",
+        "images_2.png",
+        "images_3.png",
+        "images_4.png",
+        "images_5.png",
+        "images_6.png",
+        "images_7.png",
+        "images_8.png",
+        "images_9.png",
+        "images_10.png",
+        "images_11.png"
+      ],
+      "paid": false,
+      "stripeSessionId": null,
+      "consumedAt": null,
+      "createdAt": "2026-04-23T03:42:06.175Z"
+    },
+    {
+      "id": "5e26ba2b-6f29-421b-82b6-0911e713e179",
+      "payload": {
+        "year": "2026",
+        "startMonth": "1",
+        "weekStart": "monday",
+        "layoutMode": "landscape-spread",
+        "monthFont": "Arial",
+        "weekDaysFont": "Arial",
+        "datesFont": "Arial",
+        "datesFontSize": "5",
+        "events": "[{\"date\":\"2003-02-12\",\"occasion\":\"Amanzhol\"},{\"date\":\"2009-04-14\",\"occasion\":\"Kuralai\"},{\"date\":\"1969-11-24\",\"occasion\":\"Amy\"}]"
+      },
+      "imageFilenames": [
+        "images_0.png",
+        "images_1.png",
+        "images_2.png",
+        "images_3.png",
+        "images_4.png",
+        "images_5.png",
+        "images_6.png",
+        "images_7.png",
+        "images_8.png",
+        "images_9.png",
+        "images_10.png",
+        "images_11.jpeg"
+      ],
+      "paid": false,
+      "stripeSessionId": null,
+      "consumedAt": null,
+      "createdAt": "2026-04-23T03:48:22.881Z"
+    },
+    {
+      "id": "1afdf775-2fa4-412e-aacc-8ce6bccfca7e",
+      "payload": {
+        "year": "2026",
+        "startMonth": "1",
+        "weekStart": "sunday",
+        "layoutMode": "portrait-single",
+        "monthFont": "Arial",
+        "weekDaysFont": "Arial",
+        "datesFont": "Arial",
+        "datesFontSize": "5",
+        "events": "[{\"date\":\"2003-02-12\",\"occasion\":\"Amanzhol\"},{\"date\":\"2009-04-14\",\"occasion\":\"Kuralai\"},{\"date\":\"1969-11-24\",\"occasion\":\"Amy\"}]"
+      },
+      "imageFilenames": [
+        "images_0.png",
+        "images_1.png",
+        "images_2.png",
+        "images_3.png",
+        "images_4.png",
+        "images_5.png",
+        "images_6.png",
+        "images_7.png",
+        "images_8.png",
+        "images_9.png",
+        "images_10.png",
+        "images_11.png"
+      ],
+      "paid": true,
+      "stripeSessionId": "cs_test_a1W3DWBsGgFriE5RoQ2d4TA8UvxRgZvdtziNxegtG8ANGvB4gJcE3zGfVz",
+      "consumedAt": "2026-04-24T02:06:56.067Z",
+      "createdAt": "2026-04-24T02:03:33.505Z"
+    },
+    {
+      "id": "9c20aa06-999d-4c93-ad51-176c465f041d",
+      "payload": {
+        "year": "2026",
+        "startMonth": "1",
+        "weekStart": "monday",
+        "layoutMode": "landscape-spread",
+        "monthFont": "Arial",
+        "weekDaysFont": "Arial",
+        "datesFont": "Arial",
+        "datesFontSize": "5",
+        "events": "[{\"date\":\"2003-02-12\",\"occasion\":\"Amanzhol\"},{\"date\":\"2009-04-14\",\"occasion\":\"Kuralai\"},{\"date\":\"1969-11-24\",\"occasion\":\"Amy\"},{\"date\":\"1973-11-15\",\"occasion\":\"Marat\"}]"
+      },
+      "imageFilenames": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "paid": false,
+      "stripeSessionId": null,
+      "consumedAt": null,
+      "createdAt": "2026-04-24T02:05:43.766Z"
+    },
+    {
+      "id": "e108d335-0b7b-4e13-8970-ab13da239163",
+      "payload": {
+        "year": "2026",
+        "startMonth": "1",
+        "weekStart": "monday",
+        "layoutMode": "landscape-spread",
+        "monthFont": "Arial",
+        "weekDaysFont": "Arial",
+        "datesFont": "Arial",
+        "datesFontSize": "5",
+        "events": "[{\"date\":\"2003-02-12\",\"occasion\":\"Amanzhol\"},{\"date\":\"2009-04-14\",\"occasion\":\"Kuralai\"},{\"date\":\"1969-11-24\",\"occasion\":\"Amy\"},{\"date\":\"1973-11-15\",\"occasion\":\"Marat\"}]"
+      },
+      "imageFilenames": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "paid": true,
+      "stripeSessionId": "cs_test_a12IAYOxt2W5S2c9nZiOPKTB675rxGQHWaaA9zhmvPfv1ZyoKZevp2J9rY",
+      "consumedAt": "2026-04-24T02:18:47.934Z",
+      "createdAt": "2026-04-24T02:17:36.686Z"
+    },
+    {
+      "id": "c44f91a3-b893-4fc6-8f4e-dd4bdaec0db2",
+      "payload": {
+        "year": "2026",
+        "startMonth": "1",
+        "weekStart": "sunday",
+        "layoutMode": "landscape-spread",
+        "monthFont": "Arial",
+        "weekDaysFont": "Arial",
+        "datesFont": "Arial",
+        "datesFontSize": "3",
+        "events": "[]"
+      },
+      "imageFilenames": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "paid": true,
+      "stripeSessionId": "cs_test_a1hgKl2Z1sURmEMsVWbQYyvyhSO8AxltGSnmmhI0jJ4QyvypJ3idFLoOSZ",
+      "consumedAt": "2026-04-24T02:20:11.639Z",
+      "createdAt": "2026-04-24T02:19:26.687Z"
+    },
+    {
+      "id": "7d12f4be-0a9f-4fbf-88d7-fdef447b078f",
+      "payload": {
+        "year": "2026",
+        "startMonth": "1",
+        "weekStart": "monday",
+        "layoutMode": "landscape-spread",
+        "monthFont": "Arial",
+        "weekDaysFont": "Arial",
+        "datesFont": "Arial",
+        "datesFontSize": "5",
+        "events": "[{\"date\":\"2003-02-12\",\"occasion\":\"Amanzhol\"},{\"date\":\"2009-04-14\",\"occasion\":\"Kuralai\"},{\"date\":\"1969-11-24\",\"occasion\":\"Amy\"},{\"date\":\"1973-11-15\",\"occasion\":\"Marat\"}]"
+      },
+      "imageFilenames": [
+        "images_0.png",
+        "images_1.png",
+        "images_2.png",
+        "images_3.png",
+        "images_4.png",
+        "images_5.png",
+        "images_6.png",
+        "images_7.png",
+        "images_8.png",
+        "images_9.png",
+        "images_10.png",
+        "images_11.png"
+      ],
+      "paid": true,
+      "stripeSessionId": "cs_test_a106yAXDQD4S8oZk1FsCaoiuRWqHngWZdEKe6m1jZnk4qwwuDLlkGHYBA6",
+      "consumedAt": "2026-04-24T02:27:29.220Z",
+      "createdAt": "2026-04-24T02:26:26.957Z"
+    },
+    {
+      "id": "fb29c190-5d1e-4687-946e-a3bb0c8bbf9b",
+      "payload": {
+        "year": "2026",
+        "startMonth": "1",
+        "weekStart": "monday",
+        "layoutMode": "landscape-spread",
+        "monthFont": "Comic Sans MS",
+        "weekDaysFont": "Palatino",
+        "datesFont": "Palatino",
+        "datesFontSize": "5",
+        "dateNumberPosition": "top-left",
+        "events": "[{\"date\":\"2003-02-12\",\"occasion\":\"Amanzhol\"},{\"date\":\"2009-04-14\",\"occasion\":\"Kuralai\"},{\"date\":\"1969-11-24\",\"occasion\":\"Amy\"},{\"date\":\"1973-11-15\",\"occasion\":\"Marat\"}]"
+      },
+      "imageFilenames": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "paid": false,
+      "stripeSessionId": null,
+      "consumedAt": null,
+      "createdAt": "2026-04-24T02:54:52.090Z"
     }
   ]
 }
