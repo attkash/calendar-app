@@ -6,7 +6,9 @@ import { useAuth, authHeaders } from '../context/AuthContext';
 import type { SavedCalendarSummary } from '../types/calendar';
 import { Calendar, LogOut, Pencil, Plus, Trash2 } from 'lucide-react';
 
-const API_URL = import.meta.env.DEV ? '' : '';
+const API_URL =
+  (import.meta.env.VITE_API_URL as string | undefined)?.trim() ||
+  (import.meta.env.DEV ? 'http://localhost:3000' : '');
 
 const MONTH_SHORT = [
   'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',

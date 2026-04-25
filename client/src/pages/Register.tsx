@@ -6,7 +6,9 @@ import { Label } from '../components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { useAuth } from '../context/AuthContext';
 
-const API_URL = import.meta.env.DEV ? '' : '';
+const API_URL =
+  (import.meta.env.VITE_API_URL as string | undefined)?.trim() ||
+  (import.meta.env.DEV ? 'http://localhost:3000' : '');
 
 export function Register() {
   const navigate = useNavigate();
