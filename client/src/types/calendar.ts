@@ -21,6 +21,8 @@ export interface SavedCalendarFull {
   datesFont: string;
   datesFontSize: string;
   dateNumberPosition?: DateNumberPosition;
+  /** Selected holiday / celebration rulesets (e.g. usa, catholic-protestant) */
+  holidayCalendars?: string[];
   archiveFolder: string;
   archiveReplaceAll: boolean;
   layoutMode: PdfLayoutMode;

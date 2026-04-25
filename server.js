@@ -9,6 +9,10 @@ const crypto = require("crypto");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const dataStore = require("./dataStore");
+const {
+  getHolidayMapForYear,
+  parseHolidayCalendarsList,
+} = require("./holidays");
 
 const Stripe = require("stripe");
 const STRIPE_PRODUCT_ID =
@@ -110,6 +114,7 @@ function publicCalendar(c) {
     datesFont: c.datesFont,
     datesFontSize: c.datesFontSize,
     dateNumberPosition: c.dateNumberPosition || "top-left",
+    holidayCalendars: Array.isArray(c.holidayCalendars) ? c.holidayCalendars : [],
     archiveFolder: c.archiveFolder,
     archiveReplaceAll: c.archiveReplaceAll,
     layoutMode: c.layoutMode || "landscape-spread",
@@ -456,6 +461,96 @@ function escapeHtml(s) {
     .replace(/"/g, "&quot;");
 }
 
+function parseHolidayCalendarsFromBody(body) {
+  let raw = body && body.holidayCalendars;
+  if (raw == null) return [];
+  if (Array.isArray(raw)) return parseHolidayCalendarsList(raw);
+  if (typeof raw === "string") {
+    try {
+      return parseHolidayCalendarsList(JSON.parse(raw || "[]"));
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
+
+/**
+ * Small inline SVG before holiday name (~1em). Colours: Jewish blue, Muslim green, Orthodox orange, Catholic dark Latin, plain black, USA blue, Buddhist gold wheel.
+ */
+function holidayIconHtml(source) {
+  const s = String(source || "simple");
+  const a =
+    "class=\"holiday-ico-svg\" width=\"0.9em\" height=\"0.9em\" style=\"display:inline-block;vertical-align:-0.1em;margin-right:0.2em;flex-shrink:0\" focusable=\"false\" aria-hidden=\"true\" xmlns=\"http://www.w3.org/2000/svg\"";
+  if (s === "jewish") {
+    return `<span class="holiday-ico"><svg ${a} viewBox="0 0 16 16"><path fill="#3b82f6" d="M8 0.5L14.5 11.3H1.5L8 0.5zM8 15.5L1.5 4.7h13L8 15.5z"/></svg></span>`;
+  }
+  if (s === "muslim") {
+    return `<span class="holiday-ico"><svg ${a} viewBox="0 0 24 24"><path fill="#16a34a" d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" /></svg></span>`;
+  }
+  if (s === "orthodox") {
+    return `<span class="holiday-ico"><svg ${a} viewBox="0 0 16 16" fill="none" stroke="#f97316" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="0.5" x2="8" y2="15.5" /><line x1="3" y1="1.5" x2="13" y2="1.5" /><line x1="1" y1="4.2" x2="15" y2="4.2" /><line x1="9.2" y1="8.2" x2="12.2" y2="11.2" /><line x1="4" y1="10.2" x2="12" y2="10.2" /></svg></span>`;
+  }
+  if (s === "catholic") {
+    return `<span class="holiday-ico"><svg ${a} viewBox="0 0 16 16" fill="none" stroke="#1e3a5f" stroke-width="1.4" stroke-linecap="round"><line x1="8" y1="0.5" x2="8" y2="15.5" /><line x1="0.5" y1="3" x2="15.5" y2="3" /></svg></span>`;
+  }
+  if (s === "simple") {
+    return `<span class="holiday-ico"><svg ${a} viewBox="0 0 16 16" fill="none" stroke="#0a0a0a" stroke-width="1.3" stroke-linecap="round"><line x1="8" y1="1" x2="8" y2="15" /><line x1="1" y1="8" x2="15" y2="8" /></svg></span>`;
+  }
+  if (s === "usa") {
+    return `<span class="holiday-ico"><svg ${a} viewBox="0 0 16 16"><path fill="#1d4ed8" d="M8 1.2l1.75 2.1 2.1.15-1.55 1.25.45 2.1-1.7-.95-1.7.95.45-2.1-1.55-1.25 2.1-.15L8 1.2z"/></svg></span>`;
+  }
+  if (s === "buddhist") {
+    return `<span class="holiday-ico"><svg ${a} viewBox="0 0 16 16" fill="none" stroke="#d97706" stroke-width="1.05"><circle cx="8" cy="8" r="6.2" /><line x1="8" y1="1.8" x2="8" y2="14.2" /><line x1="1.8" y1="8" x2="14.2" y2="8" /><line x1="2.7" y1="2.7" x2="13.3" y2="13.3" /><line x1="13.3" y1="2.7" x2="2.7" y2="13.3" /><circle cx="8" cy="8" r="0.8" fill="#d97706" stroke="none"/></svg></span>`;
+  }
+  return holidayIconHtml("simple");
+}
+
+/**
+ * @param {Array<{ date: string, occasion: string }>} userDayEvents
+ * @param {string} monthDayKey MM-DD
+ * @param {Map<string, { name: string, isHoliday: boolean, source?: string }[]>} holidayMap
+ */
+function buildEventHtmlForCell(userDayEvents, monthDayKey, holidayMap) {
+  const lines = [];
+  if (userDayEvents && userDayEvents.length) {
+    userDayEvents.forEach((e) => {
+      const y = String(e.date).split("-")[0];
+      const parts = String(e.occasion || "")
+        .split(/\s*;\s*/)
+        .map((s) => s.trim())
+        .filter(Boolean);
+      parts.forEach((chunk) => {
+        const line = y ? `${chunk} (${y})` : chunk;
+        lines.push({ text: line, isHoliday: false, source: null });
+      });
+    });
+  }
+  const seen = new Set(lines.map((l) => l.text.toLowerCase()));
+  (holidayMap.get(monthDayKey) || []).forEach((h) => {
+    const n = h.name;
+    if (!seen.has(n.toLowerCase())) {
+      seen.add(n.toLowerCase());
+      lines.push({
+        text: n,
+        isHoliday: true,
+        source: h.source != null ? String(h.source) : "simple",
+      });
+    }
+  });
+  if (lines.length === 0) return "";
+  return lines
+    .map((l) => {
+      const t = escapeHtml(l.text);
+      if (l.isHoliday) {
+        const ico = holidayIconHtml(/** @type {string} */(l.source));
+        return `<span class="event-line event-line--holiday">${ico}<span class="holiday-label">${t}</span></span>`;
+      }
+      return `<span class="event-line event-line--user">${t}</span>`;
+    })
+    .join("<br />");
+}
+
 function guessMime(p) {
   const ext = path.extname(p || "").toLowerCase();
   const map = {
@@ -538,6 +633,8 @@ async function generateCalendarPdfBuffer(body, rawFiles) {
     }
   });
 
+  const holidaySelected = parseHolidayCalendarsFromBody(body);
+
   const template = fs.readFileSync(TEMPLATE_PATH, "utf-8");
 
   const monthNames = [
@@ -567,41 +664,36 @@ async function generateCalendarPdfBuffer(body, rawFiles) {
     const monthIndex = offset % 12;
     const pageYear = startYear + Math.floor(offset / 12);
     const days = generateCalendar(pageYear, monthIndex, weekStart);
+    const holidayMap = getHolidayMapForYear(pageYear, holidaySelected);
+    const numWeeks = Math.ceil(days.length / 7);
 
-    let grid = weekDayNames
-      .map((name, col) => {
-        const wk = isWeekendColumn(col, weekStart);
-        const cls = wk
-          ? "cell cell-header cell-header--weekend"
-          : "cell cell-header";
-        return `<div class="${cls}" style="font-family: ${weekDaysFont}, sans-serif">${name}</div>`;
-      })
-      .join("");
-
-    days.forEach((day, i) => {
-      const col = i % 7;
+    let grid = `<div class="cal-month-grid">`;
+    grid += `<div class="cal-row cal-row--dow">`;
+    weekDayNames.forEach((name, col) => {
       const wk = isWeekendColumn(col, weekStart);
-      const cellCls = `${wk ? "cell cell--weekend" : "cell"} ${datePosClass}`;
-      let eventHtml = "";
-      if (day !== "") {
-        const monthDayKey = `${String(monthIndex + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-        const dayEvents = eventsByMonthDay[monthDayKey] || [];
-        const lines = [];
-        dayEvents.forEach((e) => {
-          const y = String(e.date).split("-")[0];
-          const parts = String(e.occasion || "")
-            .split(/\s*;\s*/)
-            .map((s) => s.trim())
-            .filter(Boolean);
-          parts.forEach((chunk) => {
-            const line = y ? `${chunk} (${y})` : chunk;
-            lines.push(escapeHtml(line));
-          });
-        });
-        eventHtml = lines.join("<br />");
-      }
+      const cls = wk
+        ? "cell cell-header cell-header--weekend"
+        : "cell cell-header";
+      grid += `<div class="${cls}" style="font-family: ${weekDaysFont}, sans-serif">${name}</div>`;
+    });
+    grid += `</div>`;
 
-      grid += `
+    for (let w = 0; w < numWeeks; w++) {
+      grid += `<div class="cal-row">`;
+      for (let c = 0; c < 7; c++) {
+        const idx = w * 7 + c;
+        const day = days[idx] ?? "";
+        const wk = isWeekendColumn(c, weekStart);
+        const cellCls = `${wk ? "cell cell--weekend" : "cell"} ${datePosClass}`;
+        let eventHtml = "";
+        if (day !== "") {
+          const monthDayKey = `${String(monthIndex + 1).padStart(2, "0")}-${String(
+            day
+          ).padStart(2, "0")}`;
+          const userEvs = eventsByMonthDay[monthDayKey] || [];
+          eventHtml = buildEventHtmlForCell(userEvs, monthDayKey, holidayMap);
+        }
+        grid += `
           <div class="${cellCls}" style="font-family: ${datesFont}, sans-serif">
             <div class="cell-day-top">
               <div class="date" style="font-size: ${dateNumberMm}mm; font-family: ${datesFont}, sans-serif">${day || ""}</div>
@@ -609,7 +701,10 @@ async function generateCalendarPdfBuffer(body, rawFiles) {
             <div class="event">${eventHtml}</div>
           </div>
         `;
-    });
+      }
+      grid += `</div>`;
+    }
+    grid += `</div>`;
 
     if (layoutMode === "portrait-single") {
       const combinedClass =
@@ -618,9 +713,9 @@ async function generateCalendarPdfBuffer(body, rawFiles) {
           : "page page--month-combined";
       monthsHtml += `
         <div class="${combinedClass}">
-          <h2 class="month-combined-title" style="font-family: ${monthFont}, serif">${monthNames[monthIndex]} ${pageYear}</h2>
           <div class="month-combined-photo">${getPhotoMarkup(images, monthIndex, layoutMode)}</div>
-          <div class="grid">${grid}</div>
+          <h2 class="month-combined-title" style="font-family: ${monthFont}, serif">${monthNames[monthIndex]} ${pageYear}</h2>
+          <div class="cal-month-grid-root">${grid}</div>
         </div>
       `;
     } else {
@@ -634,7 +729,7 @@ async function generateCalendarPdfBuffer(body, rawFiles) {
           <h2 class="month-spread-title" style="font-family: ${monthFont}, serif">${monthNames[monthIndex]} ${pageYear}</h2>
         </div>
         <div class="${calendarPageClass}">
-          <div class="grid">${grid}</div>
+          <div class="cal-month-grid-root">${grid}</div>
         </div>
       `;
     }
@@ -702,6 +797,7 @@ app.post(
         datesFont: req.body.datesFont,
         datesFontSize: req.body.datesFontSize,
         dateNumberPosition: normalizeDateNumberPosition(req.body.dateNumberPosition),
+        holidayCalendars: parseHolidayCalendarsFromBody(req.body),
         events: req.body.events || "[]",
       };
 
@@ -731,7 +827,15 @@ app.post(
 
       return res.json({ url: session.url, entitlementId });
     } catch (err) {
-      console.error("Checkout session error:", err.message);
+      const e = /** @type {Error} */ (err);
+      console.error("Checkout session error:", {
+        message: e?.message,
+        stack: e?.stack,
+        layoutMode: req?.body?.layoutMode,
+        year: req?.body?.year,
+        startMonth: req?.body?.startMonth,
+        entitlementId,
+      });
       return res.status(500).json({ error: "Could not start checkout" });
     }
   }
@@ -772,7 +876,13 @@ app.get("/api/calendar/checkout-summary", async (req, res) => {
       typeof session.currency === "string" ? session.currency : "usd";
     return res.json({ amountTotal, currency });
   } catch (err) {
-    console.error("Checkout summary error:", err.message);
+    const e = /** @type {Error} */ (err);
+    console.error("Checkout summary error:", {
+      message: e?.message,
+      stack: e?.stack,
+      entitlementId,
+      sessionId,
+    });
     return res.status(500).json({ error: "Could not load payment summary" });
   }
 });
@@ -856,7 +966,13 @@ app.get("/api/calendar/download", async (req, res) => {
     );
     return res.send(pdfBuffer);
   } catch (err) {
-    console.error("Download error:", err.message);
+    const e = /** @type {Error} */ (err);
+    console.error("Download error:", {
+      message: e?.message,
+      stack: e?.stack,
+      entitlementId,
+      sessionId,
+    });
     return res.status(500).json({ error: "Could not generate download" });
   }
 });

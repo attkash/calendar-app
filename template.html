@@ -78,18 +78,34 @@
       flex-direction: column;
       padding: 8mm;
     }
-    body.pdf-layout-landscape-spread .page--month-calendar .grid {
+    body.pdf-layout-landscape-spread .page--month-calendar .cal-month-grid-root {
       flex: 1;
       min-height: 0;
-      width: 100%;
+      display: flex;
+      flex-direction: column;
+    }
+    body.pdf-layout-landscape-spread .page--month-calendar .cal-month-grid {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    body.pdf-layout-landscape-spread .page--month-calendar .cal-row--dow {
       display: grid;
       grid-template-columns: repeat(7, 1fr);
-      grid-auto-rows: minmax(15mm, 1fr);
       gap: 2px;
-      align-content: stretch;
+      flex: 0 0 auto;
+    }
+    body.pdf-layout-landscape-spread .page--month-calendar .cal-row:not(.cal-row--dow) {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 2px;
+      flex: 1;
+      min-height: 0;
     }
     body.pdf-layout-landscape-spread .page--month-calendar .cell {
-      min-height: 15mm;
+      min-height: 0;
       border: 1px solid #e0e0e0;
       padding: 3px;
       display: flex;
@@ -129,16 +145,20 @@
       overflow: hidden;
     }
     body.pdf-layout-landscape-spread .page--month-calendar .cell-header {
-      min-height: 9mm;
+      min-height: 0;
+      max-height: 5.5mm;
+      padding: 0.5mm 1px;
+      line-height: 1;
       font-weight: 600;
-      font-size: 4.2mm;
-      letter-spacing: 0.03em;
+      font-size: 3.1mm;
+      letter-spacing: 0.02em;
       color: #2c3e50;
       text-align: center;
       background: #f8f9fa;
       display: flex;
       align-items: center;
       justify-content: center;
+      overflow: hidden;
     }
     body.pdf-layout-landscape-spread .page--month-calendar .date {
       font-weight: 600;
@@ -147,28 +167,43 @@
       min-height: 1.2em;
     }
     body.pdf-layout-landscape-spread .page--month-calendar .event {
-      flex: 1;
       display: block;
+      margin-top: auto;
+      width: 100%;
+      flex: 0 1 auto;
       font-size: 9px;
-      color: #555;
       line-height: 1.35;
       word-break: break-word;
       white-space: normal;
     }
+    body.pdf-layout-landscape-spread .page--month-calendar .event-line--user {
+      color: #555;
+    }
+    body.pdf-layout-landscape-spread .page--month-calendar .event-line--holiday {
+      display: inline-flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 0.15em;
+      max-width: 100%;
+      color: #b42318;
+      font-weight: 600;
+    }
+    body.pdf-layout-landscape-spread .page--month-calendar .event-line--holiday .holiday-label {
+      min-width: 0;
+    }
 
-    body.pdf-layout-landscape-spread .page--month-calendar.page--date-size-5 .grid {
+    body.pdf-layout-landscape-spread .page--month-calendar.page--date-size-5 .cal-month-grid {
       gap: 1px;
-      grid-auto-rows: minmax(13mm, 1fr);
     }
     body.pdf-layout-landscape-spread .page--month-calendar.page--date-size-5 .cell:not(.cell-header) {
       padding: 1px 2px;
-      min-height: 13mm;
+      min-height: 0;
       overflow: hidden;
     }
     body.pdf-layout-landscape-spread .page--month-calendar.page--date-size-5 .cell-header {
-      min-height: 8mm;
-      padding: 2px;
-      font-size: 3.8mm;
+      max-height: 4.8mm;
+      padding: 0.3mm 1px;
+      font-size: 2.9mm;
     }
     body.pdf-layout-landscape-spread .page--month-calendar.page--date-size-5 .date {
       line-height: 0.95;
@@ -196,33 +231,47 @@
     body.pdf-layout-portrait-single .page--month-combined {
       display: flex;
       flex-direction: column;
-      padding: 12mm;
+      box-sizing: border-box;
+      height: 297mm;
+      min-height: 297mm;
+      max-height: 297mm;
+      padding: 8mm 12mm 8mm 12mm;
     }
     body.pdf-layout-portrait-single .month-combined-title {
       font-size: 1.35cm;
       font-weight: 400;
       color: #2c3e50;
       text-align: center;
-      margin-bottom: 6mm;
+      margin: 0 0 3mm;
       line-height: 1.1;
       letter-spacing: 0.04em;
-    }
-    body.pdf-layout-portrait-single .month-combined-photo {
       flex-shrink: 0;
-      margin-bottom: 6mm;
+    }
+    /* Upper half of A4 (297mm): photo block uses full 148.5mm band */
+    body.pdf-layout-portrait-single .month-combined-photo {
+      flex: 0 0 148.5mm;
+      width: 100%;
+      min-height: 0;
+      margin: 0 0 3mm;
+      overflow: hidden;
+      border-radius: 2px;
+      display: flex;
+      flex-direction: column;
     }
     body.pdf-layout-portrait-single .photo.photo--inline {
       display: block;
       width: 100%;
-      max-height: 88mm;
-      min-height: 55mm;
+      height: 100%;
+      min-height: 0;
+      max-height: none;
       object-fit: cover;
       border-radius: 2px;
     }
     body.pdf-layout-portrait-single .photo-placeholder.photo--inline {
       width: 100%;
-      max-height: 88mm;
-      min-height: 55mm;
+      height: 100%;
+      min-height: 0;
+      max-height: none;
       border-radius: 2px;
       background: #e8eaed;
       border: 1px dashed #c5c9d0;
@@ -232,16 +281,34 @@
       color: #888;
       font-size: 14px;
     }
-    body.pdf-layout-portrait-single .page--month-combined .grid {
+    body.pdf-layout-portrait-single .page--month-combined .cal-month-grid-root {
       flex: 1;
       min-height: 0;
-      display: grid;
-      grid-template-columns: repeat(7, 1fr);
-      grid-auto-rows: minmax(12mm, 1fr);
+      display: flex;
+      flex-direction: column;
+    }
+    body.pdf-layout-portrait-single .page--month-combined .cal-month-grid {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
       gap: 2px;
     }
+    body.pdf-layout-portrait-single .page--month-combined .cal-row--dow {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 2px;
+      flex: 0 0 auto;
+    }
+    body.pdf-layout-portrait-single .page--month-combined .cal-row:not(.cal-row--dow) {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 2px;
+      flex: 1;
+      min-height: 0;
+    }
     body.pdf-layout-portrait-single .page--month-combined .cell {
-      min-height: 12mm;
+      min-height: 0;
       border: 1px solid #e0e0e0;
       padding: 3px;
       display: flex;
@@ -281,16 +348,20 @@
       overflow: hidden;
     }
     body.pdf-layout-portrait-single .page--month-combined .cell-header {
-      min-height: 8mm;
+      min-height: 0;
+      max-height: 5.5mm;
+      padding: 0.5mm 1px;
+      line-height: 1;
       font-weight: 600;
-      font-size: 3.8mm;
-      letter-spacing: 0.03em;
+      font-size: 3.1mm;
+      letter-spacing: 0.02em;
       color: #2c3e50;
       text-align: center;
       background: #f8f9fa;
       display: flex;
       align-items: center;
       justify-content: center;
+      overflow: hidden;
     }
     body.pdf-layout-portrait-single .page--month-combined .date {
       font-weight: 600;
@@ -299,32 +370,43 @@
       min-height: 1.2em;
     }
     body.pdf-layout-portrait-single .page--month-combined .event {
-      flex: 1;
       display: block;
+      margin-top: auto;
+      width: 100%;
+      flex: 0 1 auto;
       font-size: 9px;
-      color: #555;
       line-height: 1.35;
       word-break: break-word;
       white-space: normal;
     }
-
-    body.pdf-layout-portrait-single .page--month-combined.page--date-size-5-combined .photo.photo--inline,
-    body.pdf-layout-portrait-single .page--month-combined.page--date-size-5-combined .photo-placeholder.photo--inline {
-      max-height: 62mm;
-      min-height: 36mm;
+    body.pdf-layout-portrait-single .page--month-combined .event-line--user {
+      color: #555;
     }
-    body.pdf-layout-portrait-single .page--month-combined.page--date-size-5-combined .grid {
+    body.pdf-layout-portrait-single .page--month-combined .event-line--holiday {
+      display: inline-flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 0.15em;
+      max-width: 100%;
+      color: #b42318;
+      font-weight: 600;
+    }
+    body.pdf-layout-portrait-single .page--month-combined .event-line--holiday .holiday-label {
+      min-width: 0;
+    }
+
+    body.pdf-layout-portrait-single .page--month-combined.page--date-size-5-combined .cal-month-grid {
       gap: 1px;
-      grid-auto-rows: minmax(12mm, 1fr);
     }
     body.pdf-layout-portrait-single .page--month-combined.page--date-size-5-combined .cell:not(.cell-header) {
       padding: 1px 2px;
-      min-height: 12mm;
+      min-height: 0;
       overflow: hidden;
     }
     body.pdf-layout-portrait-single .page--month-combined.page--date-size-5-combined .cell-header {
-      min-height: 7mm;
-      font-size: 3.5mm;
+      max-height: 4.8mm;
+      padding: 0.3mm 1px;
+      font-size: 2.9mm;
     }
     body.pdf-layout-portrait-single .page--month-combined.page--date-size-5-combined .date {
       line-height: 0.95;
@@ -349,8 +431,8 @@
     body.pdf-layout-portrait-single .cell--weekend:not(.cell-header) .date {
       color: #b42318;
     }
-    body.pdf-layout-landscape-spread .cell--weekend:not(.cell-header) .event,
-    body.pdf-layout-portrait-single .cell--weekend:not(.cell-header) .event {
+    body.pdf-layout-landscape-spread .cell--weekend:not(.cell-header) .event .event-line--user,
+    body.pdf-layout-portrait-single .cell--weekend:not(.cell-header) .event .event-line--user {
       color: #6b2c2c;
     }
 

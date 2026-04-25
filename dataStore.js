@@ -109,6 +109,9 @@ function upsertSavedCalendar(userId, payload) {
       payload.dateNumberPosition === "top-left"
         ? payload.dateNumberPosition
         : "top-left",
+    holidayCalendars: Array.isArray(payload.holidayCalendars)
+      ? payload.holidayCalendars.filter((x) => typeof x === "string")
+      : [],
     archiveFolder: typeof payload.archiveFolder === "string" ? payload.archiveFolder : "",
     archiveReplaceAll: Boolean(payload.archiveReplaceAll),
     layoutMode:

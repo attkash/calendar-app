@@ -50,6 +50,24 @@ const DATE_POSITION_OPTIONS: { value: DateNumberPosition; label: string }[] = [
   { value: 'center', label: 'Center of cell' },
 ];
 
+const HOLIDAY_CALENDAR_OPTION_IDS = [
+  'catholic-protestant',
+  'orthodox',
+  'muslim',
+  'jewish',
+  'buddhist',
+  'usa',
+] as const;
+
+const HOLIDAY_CALENDAR_OPTIONS: { id: (typeof HOLIDAY_CALENDAR_OPTION_IDS)[number]; label: string }[] = [
+  { id: 'catholic-protestant', label: 'Catholic & Protestant (Western)' },
+  { id: 'orthodox', label: 'Orthodox Christian' },
+  { id: 'muslim', label: 'Muslim' },
+  { id: 'jewish', label: 'Jewish' },
+  { id: 'buddhist', label: 'Buddhist' },
+  { id: 'usa', label: 'U.S. federal & civic holidays' },
+];
+
 const FONT_OPTIONS = [
   'Arial',
   'Times New Roman',
@@ -163,6 +181,7 @@ export function ApplicationForm() {
   const [datesFont, setDatesFont] = useState('Arial');
   const [datesFontSize, setDatesFontSize] = useState('3');
   const [dateNumberPosition, setDateNumberPosition] = useState<DateNumberPosition>('top-left');
+  const [holidayCalendars, setHolidayCalendars] = useState<string[]>([]);
   const [layoutMode, setLayoutMode] = useState<PdfLayoutMode>('landscape-spread');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -321,6 +340,15 @@ export function ApplicationForm() {
     setDateNumberPosition(
       dnp === 'center' || dnp === 'top-center' || dnp === 'top-left' ? dnp : 'top-left'
     );
+    if (Array.isArray(cal.holidayCalendars) && cal.holidayCalendars.length > 0) {
+      setHolidayCalendars(
+        cal.holidayCalendars.filter((id) =>
+          HOLIDAY_CALENDAR_OPTION_IDS.includes(id as (typeof HOLIDAY_CALENDAR_OPTION_IDS)[number])
+        )
+      );
+    } else {
+      setHolidayCalendars([]);
+    }
     setArchiveFolder(typeof cal.archiveFolder === 'string' ? cal.archiveFolder : '');
     setArchiveReplaceAll(Boolean(cal.archiveReplaceAll));
     setLayoutMode(cal.layoutMode === 'portrait-single' ? 'portrait-single' : 'landscape-spread');
@@ -438,6 +466,7 @@ export function ApplicationForm() {
         datesFont?: string;
         datesFontSize?: string;
         dateNumberPosition?: DateNumberPosition;
+        holidayCalendars?: string[];
         archiveFolder?: string;
         archiveReplaceAll?: boolean;
         layoutMode?: PdfLayoutMode;
@@ -460,6 +489,13 @@ export function ApplicationForm() {
       }
       if (d.dateNumberPosition === 'center' || d.dateNumberPosition === 'top-center' || d.dateNumberPosition === 'top-left') {
         setDateNumberPosition(d.dateNumberPosition);
+      }
+      if (Array.isArray(d.holidayCalendars) && d.holidayCalendars.length > 0) {
+        setHolidayCalendars(
+          d.holidayCalendars.filter((id) =>
+            HOLIDAY_CALENDAR_OPTION_IDS.includes(id as (typeof HOLIDAY_CALENDAR_OPTION_IDS)[number])
+          )
+        );
       }
       if (typeof d.archiveFolder === 'string') setArchiveFolder(d.archiveFolder);
       if (typeof d.archiveReplaceAll === 'boolean') setArchiveReplaceAll(d.archiveReplaceAll);
@@ -498,6 +534,7 @@ export function ApplicationForm() {
           datesFont,
           datesFontSize,
           dateNumberPosition,
+          holidayCalendars,
           archiveFolder,
           archiveReplaceAll,
           layoutMode,
@@ -524,6 +561,7 @@ export function ApplicationForm() {
     datesFont,
     datesFontSize,
     dateNumberPosition,
+    holidayCalendars,
     archiveFolder,
     archiveReplaceAll,
     layoutMode,
@@ -639,6 +677,12 @@ export function ApplicationForm() {
     }
   };
 
+  const toggleHolidayCalendar = (id: string) => {
+    setHolidayCalendars((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  };
+
   const addEvent = () => {
     setDateEvents(prev => [
       ...prev,
@@ -680,6 +724,7 @@ export function ApplicationForm() {
         datesFont,
         datesFontSize,
         dateNumberPosition,
+        holidayCalendars,
         archiveFolder,
         archiveReplaceAll,
         layoutMode,
@@ -748,6 +793,7 @@ export function ApplicationForm() {
       formData.append('datesFont', datesFont);
       formData.append('datesFontSize', datesFontSize);
       formData.append('dateNumberPosition', dateNumberPosition);
+      formData.append('holidayCalendars', JSON.stringify(holidayCalendars));
       formData.append('layoutMode', layoutMode);
       formData.append('clientAppOrigin', window.location.origin);
 
@@ -869,10 +915,10 @@ export function ApplicationForm() {
             </div>
           )}
 
-          <Card className="p-6 lg:p-8">
-            <CardHeader className="p-0 pb-4">
-              <CardTitle className="text-xl">Save to your account</CardTitle>
-              <CardDescription className="text-base">
+          <Card className="p-4 lg:p-5">
+            <CardHeader className="p-0 pb-3">
+              <CardTitle className="text-lg">Save to your account</CardTitle>
+              <CardDescription className="text-sm leading-relaxed">
                 {user
                   ? 'Saves dates and design (fonts, layout, week start, Pictures folder path) — not month photos. Add or load photos again before generating a PDF.'
                   : 'Sign in or register to keep a template between years and open it from your account.'}
@@ -885,9 +931,9 @@ export function ApplicationForm() {
               {saveErr && (
                 <div className="mb-3 text-sm text-red-300">{saveErr}</div>
               )}
-              <div className="flex flex-col lg:flex-row gap-4 lg:items-end">
+              <div className="flex flex-col lg:flex-row gap-3 lg:items-end">
                 <div className="flex-1 space-y-2 min-w-0">
-                  <Label htmlFor="save-name" className="text-base">
+                  <Label htmlFor="save-name" className="text-sm">
                     Name
                   </Label>
                   <Input
@@ -895,7 +941,7 @@ export function ApplicationForm() {
                     value={saveName}
                     onChange={(e) => setSaveName(e.target.value)}
                     placeholder="e.g. Family calendar"
-                    className="h-11"
+                    className="h-10"
                     disabled={!!presetLoading}
                   />
                 </div>
@@ -903,9 +949,9 @@ export function ApplicationForm() {
                   type="button"
                   onClick={handleSaveToAccount}
                   disabled={savingPreset || !!presetLoading}
-                  className="h-11 shrink-0"
+                  className="h-10 shrink-0 px-3 text-sm"
                 >
-                  <Save className="size-4 mr-2" />
+                  <Save className="size-3.5 mr-1.5" />
                   {savingPreset
                     ? 'Saving…'
                     : editingPresetId
@@ -1013,6 +1059,38 @@ export function ApplicationForm() {
                     ))}
                   </select>
                 </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="p-6 lg:p-8">
+            <CardHeader className="p-0 pb-4">
+              <CardTitle className="text-xl">Holidays &amp; celebrations</CardTitle>
+              <CardDescription className="text-base">
+                Optional sets of public and religious dates. In the PDF they are listed in <strong>red</strong> at the bottom of
+                the day cell, with your own dates. Islamic and Jewish dates are approximate; extend years in
+                <code className="mx-1 text-sm bg-slate-800 px-1 py-0.5 rounded">holidays.js</code> on the server if needed.
+              </CardDescription>
+              <p className="mt-3 text-sm font-medium leading-snug text-red-400" role="note">
+                ATTENTION! Religious rules are only as accurate as the precomputed range.
+              </p>
+            </CardHeader>
+            <CardContent className="p-0">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {HOLIDAY_CALENDAR_OPTIONS.map((opt) => (
+                  <label
+                    key={opt.id}
+                    className="flex cursor-pointer items-start gap-3 rounded-lg border border-slate-700/80 bg-[#0f1d32] p-3 text-left hover:border-slate-600"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={holidayCalendars.includes(opt.id)}
+                      onChange={() => toggleHolidayCalendar(opt.id)}
+                      className="mt-0.5 size-4 shrink-0 rounded border-slate-500 bg-[#152238] text-blue-500 focus:ring-2 focus:ring-blue-500/40"
+                    />
+                    <span className="text-sm text-slate-200 leading-snug">{opt.label}</span>
+                  </label>
+                ))}
               </div>
             </CardContent>
           </Card>
