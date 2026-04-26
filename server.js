@@ -218,7 +218,24 @@ const calendarImageFields = Array.from({ length: 12 }, (_, i) => ({
   maxCount: 1,
 }));
 
-const PICTURES_DIR = path.join(__dirname, "Pictures");
+function resolvePicturesDir() {
+  const fromEnv = String(process.env.PICTURES_DIR || "").trim();
+  if (fromEnv) {
+    return path.resolve(__dirname, fromEnv);
+  }
+  // Linux is case-sensitive; support both names used across environments.
+  const candidates = [
+    path.join(__dirname, "Pictures"),
+    path.join(__dirname, "pictures"),
+  ];
+  for (const c of candidates) {
+    if (fs.existsSync(c)) return c;
+  }
+  // Default to Pictures when creating a new folder.
+  return candidates[0];
+}
+
+const PICTURES_DIR = resolvePicturesDir();
 const IMAGE_EXT = new Set([".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp"]);
 
 /** PDF day cell min-height in template.html (.cell); size 4 = 1/4 of this; size 5 = full cell. */
