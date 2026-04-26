@@ -27,7 +27,7 @@ const STRIPE_PRODUCT_ID = normalizeStripeId(process.env.STRIPE_PRODUCT_ID || "")
 const STRIPE_PRICE_ID = normalizeStripeId(process.env.STRIPE_PRICE_ID || "");
 const STRIPE_PRICE_LOOKUP_KEY = String(process.env.STRIPE_PRICE_LOOKUP_KEY || "").trim();
 const STRIPE_UNIT_AMOUNT_CENTS = Number.parseInt(
-  process.env.STRIPE_UNIT_AMOUNT_CENTS || "50",
+  process.env.STRIPE_UNIT_AMOUNT_CENTS || "52",
   10
 );
 const STRIPE_CURRENCY = (process.env.STRIPE_CURRENCY || "usd").toLowerCase();
