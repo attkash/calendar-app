@@ -638,7 +638,7 @@ export function ApplicationForm() {
       const files = data.files || [];
       if (files.length === 0) {
         setError(
-          'No images in Pictures. Put .jpg / .png / .webp / .gif / .bmp in the project Pictures folder (server), or in a subfolder you typed above.'
+          'No supported images found (.jpg / .png / .webp / .gif / .bmp) under this folder on the server. Check the Pictures path, file permissions, and that the server was redeployed with your image files.'
         );
         return;
       }

@@ -269,6 +269,73 @@ function resolveUnderPictures(rel) {
   return full;
 }
 
+/**
+ * Image files directly inside absDir; relPrefix is relative path under Pictures/ (posix slashes).
+ */
+function listImageFilesDirect(absDir, relPrefix) {
+  if (!fs.existsSync(absDir) || !fs.statSync(absDir).isDirectory()) return [];
+  const names = fs.readdirSync(absDir);
+  const out = [];
+  for (const n of names) {
+    if (n === "." || n === "..") continue;
+    const p = path.join(absDir, n);
+    try {
+      if (!fs.statSync(p).isFile()) continue;
+      if (!IMAGE_EXT.has(path.extname(n).toLowerCase())) continue;
+      const relPath = relPrefix ? `${relPrefix}/${n}` : n;
+      out.push({ name: n, path: relPath.replace(/\\/g, "/") });
+    } catch {
+      /* skip */
+    }
+  }
+  out.sort((a, b) =>
+    a.path.localeCompare(b.path, undefined, { numeric: true, sensitivity: "base" })
+  );
+  return out;
+}
+
+/**
+ * Breadth-first collect images under absRoot when there are no files in the root of that folder.
+ * relPrefix is path under Pictures/ using forward slashes (may be "").
+ */
+function collectImageFilesBfs(absRoot, relPrefix, maxDepth, maxFiles) {
+  const out = [];
+  const queue = [{ abs: absRoot, rel: relPrefix, depth: 0 }];
+  while (queue.length > 0 && out.length < maxFiles) {
+    const { abs, rel, depth } = queue.shift();
+    let names;
+    try {
+      if (!fs.existsSync(abs) || !fs.statSync(abs).isDirectory()) continue;
+      names = fs.readdirSync(abs);
+    } catch {
+      continue;
+    }
+    for (const n of names) {
+      if (n === "." || n === "..") continue;
+      if (out.length >= maxFiles) break;
+      const p = path.join(abs, n);
+      let st;
+      try {
+        st = fs.statSync(p);
+      } catch {
+        continue;
+      }
+      const relChild = rel ? `${rel}/${n}` : n;
+      const posix = relChild.replace(/\\/g, "/");
+      if (st.isFile()) {
+        if (!IMAGE_EXT.has(path.extname(n).toLowerCase())) continue;
+        out.push({ name: n, path: posix });
+      } else if (st.isDirectory() && depth < maxDepth) {
+        queue.push({ abs: p, rel: relChild, depth: depth + 1 });
+      }
+    }
+  }
+  out.sort((a, b) =>
+    a.path.localeCompare(b.path, undefined, { numeric: true, sensitivity: "base" })
+  );
+  return out;
+}
+
 if (!fs.existsSync(PICTURES_DIR)) {
   fs.mkdirSync(PICTURES_DIR, { recursive: true });
 }
@@ -452,21 +519,14 @@ app.get("/api/pictures/list", (req, res) => {
     if (!fs.statSync(dir).isDirectory()) {
       return res.status(400).json({ error: "Not a directory" });
     }
-    const names = fs.readdirSync(dir);
-    const files = names
-      .filter((n) => {
-        const p = path.join(dir, n);
-        try {
-          return fs.statSync(p).isFile() && IMAGE_EXT.has(path.extname(n).toLowerCase());
-        } catch {
-          return false;
-        }
-      })
-      .sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" }))
-      .map((n) => ({
-        name: n,
-        path: folder ? `${folder.replace(/\\/g, "/")}/${n}` : n,
-      }));
+    const prefix = folder ? folder.replace(/\\/g, "/") : "";
+    let files = listImageFilesDirect(dir, prefix);
+    // If this folder has no loose images, search nested subfolders (common on Linux deployments).
+    if (files.length === 0) {
+      const maxDepth = Number.parseInt(process.env.PICTURES_SCAN_MAX_DEPTH || "", 10);
+      const depth = Number.isFinite(maxDepth) && maxDepth > 0 ? maxDepth : 12;
+      files = collectImageFilesBfs(dir, prefix, depth, 800);
+    }
     res.json({ files });
   } catch (e) {
     console.error("pictures list:", e);
