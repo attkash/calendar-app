@@ -15,8 +15,17 @@ const {
 } = require("./holidays");
 
 const Stripe = require("stripe");
-const STRIPE_PRODUCT_ID =
-  process.env.STRIPE_PRODUCT_ID || "prod_UNuV4YPPSlaqD0";
+function normalizeStripeId(raw) {
+  const s = String(raw || "").trim();
+  if (!s) return "";
+  // Guard against accidental trailing punctuation from copy/paste.
+  return s.replace(/[.,;:!?]+$/g, "");
+}
+
+/** Set in .env — must match the same Stripe account + mode (test/live) as STRIPE_SECRET_KEY. */
+const STRIPE_PRODUCT_ID = normalizeStripeId(process.env.STRIPE_PRODUCT_ID || "");
+const STRIPE_PRICE_ID = normalizeStripeId(process.env.STRIPE_PRICE_ID || "");
+const STRIPE_PRICE_LOOKUP_KEY = String(process.env.STRIPE_PRICE_LOOKUP_KEY || "").trim();
 const STRIPE_UNIT_AMOUNT_CENTS = Number.parseInt(
   process.env.STRIPE_UNIT_AMOUNT_CENTS || "50",
   10
@@ -74,6 +83,46 @@ function getStripe() {
   const key = process.env.STRIPE_SECRET_KEY;
   if (!key) return null;
   return new Stripe(key);
+}
+
+/**
+ * Resolves a Price id from lookup_key (request body or env) or STRIPE_PRICE_ID.
+ * If the client sent lookup_key and nothing matched, throws (misconfiguration).
+ */
+async function resolveCheckoutPriceId(stripe, lookupKeyRaw) {
+  const bodyKey = String(lookupKeyRaw || "").trim();
+  const envKey = STRIPE_PRICE_LOOKUP_KEY;
+  const lookupKey = bodyKey || envKey;
+  if (lookupKey) {
+    const prices = await stripe.prices.list({
+      lookup_keys: [lookupKey],
+      active: true,
+      limit: 1,
+    });
+    if (prices.data && prices.data[0] && prices.data[0].id) {
+      return prices.data[0].id;
+    }
+    if (bodyKey) {
+      throw new Error(
+        `No active Stripe Price found for lookup_key '${bodyKey}'. Check Test/Live mode and that the key exists on this Price in the Stripe Dashboard.`
+      );
+    }
+  }
+  if (STRIPE_PRICE_ID) return STRIPE_PRICE_ID;
+  return "";
+}
+
+function checkoutLineItemsFromPriceData() {
+  return [
+    {
+      price_data: {
+        currency: STRIPE_CURRENCY,
+        product: STRIPE_PRODUCT_ID,
+        unit_amount: STRIPE_UNIT_AMOUNT_CENTS,
+      },
+      quantity: 1,
+    },
+  ];
 }
 
 const JWT_SECRET = process.env.JWT_SECRET || "calendar-dev-secret-change-me";
@@ -771,6 +820,7 @@ app.post(
   calendarEntitlementUpload.fields(calendarImageFields),
   async (req, res) => {
     const stripe = getStripe();
+    const entitlementId = req.calendarEntitlementId;
     if (!stripe) {
       return res.status(503).json({
         error:
@@ -778,13 +828,33 @@ app.post(
       });
     }
     try {
-      const entitlementId = req.calendarEntitlementId;
       const filesObj = req.files || {};
       const imageFilenames = [];
       for (let i = 0; i < 12; i++) {
         const arr = filesObj[`images_${i}`];
         const f = Array.isArray(arr) && arr[0] ? arr[0] : null;
         imageFilenames[i] = f ? path.basename(f.path) : null;
+      }
+
+      let resolvedPriceId = "";
+      try {
+        resolvedPriceId = await resolveCheckoutPriceId(
+          stripe,
+          req.body.lookup_key
+        );
+      } catch (lookupErr) {
+        const le = /** @type {Error} */ (lookupErr);
+        return res.status(400).json({ error: le.message || "Invalid lookup_key" });
+      }
+
+      if (!resolvedPriceId && !STRIPE_PRODUCT_ID) {
+        return res.status(400).json({
+          error:
+            "Stripe is not configured for checkout. In the project root .env set one of: " +
+            "(1) STRIPE_PRICE_ID from the same Test/Live mode as your secret key, " +
+            "(2) STRIPE_PRICE_LOOKUP_KEY (and optional VITE_STRIPE_PRICE_LOOKUP_KEY on the client), or " +
+            "(3) STRIPE_PRODUCT_ID plus STRIPE_UNIT_AMOUNT_CENTS for inline pricing.",
+        });
       }
 
       const payload = {
@@ -808,26 +878,58 @@ app.post(
       });
 
       const returnBase = pickCheckoutReturnBase(req.body.clientAppOrigin);
-      const session = await stripe.checkout.sessions.create({
+      const sessionBase = {
         mode: "payment",
-        line_items: [
-          {
-            price_data: {
-              currency: STRIPE_CURRENCY,
-              product: STRIPE_PRODUCT_ID,
-              unit_amount: STRIPE_UNIT_AMOUNT_CENTS,
-            },
-            quantity: 1,
-          },
-        ],
-        metadata: { entitlement_id: entitlementId },
+        metadata: {
+          entitlement_id: entitlementId,
+          stripe_product_id: STRIPE_PRODUCT_ID || "",
+        },
         success_url: `${returnBase}/calendar?checkout=success&entitlement_id=${encodeURIComponent(entitlementId)}&session_id={CHECKOUT_SESSION_ID}`,
         cancel_url: `${returnBase}/calendar?checkout=cancel`,
-      });
+      };
+
+      let session;
+      if (resolvedPriceId) {
+        try {
+          session = await stripe.checkout.sessions.create({
+            ...sessionBase,
+            line_items: [{ price: resolvedPriceId, quantity: 1 }],
+          });
+        } catch (priceErr) {
+          const pmsg = String(/** @type {Error} */ (priceErr)?.message || "");
+          const noSuchPrice = /No such price/i.test(pmsg);
+          if (!noSuchPrice || !STRIPE_PRODUCT_ID) throw priceErr;
+          session = await stripe.checkout.sessions.create({
+            ...sessionBase,
+            line_items: checkoutLineItemsFromPriceData(),
+          });
+        }
+      } else {
+        session = await stripe.checkout.sessions.create({
+          ...sessionBase,
+          line_items: checkoutLineItemsFromPriceData(),
+        });
+      }
 
       return res.json({ url: session.url, entitlementId });
     } catch (err) {
       const e = /** @type {Error} */ (err);
+      const msg = String(e?.message || "");
+      const noSuchPrice = /No such price:\s*'([^']+)'/i.exec(msg);
+      if (noSuchPrice) {
+        return res.status(400).json({
+          error:
+            `Stripe cannot find price ${noSuchPrice[1]} for this secret key (wrong account or Test/Live mismatch). ` +
+            "Fix STRIPE_PRICE_ID in .env or remove it and use STRIPE_PRODUCT_ID + STRIPE_UNIT_AMOUNT_CENTS.",
+        });
+      }
+      const noSuchProduct = /No such product/i.test(msg);
+      if (noSuchProduct) {
+        return res.status(400).json({
+          error:
+            "Stripe cannot find STRIPE_PRODUCT_ID for this secret key. Use a product id from the same Stripe account and mode as STRIPE_SECRET_KEY.",
+        });
+      }
       console.error("Checkout session error:", {
         message: e?.message,
         stack: e?.stack,
@@ -840,6 +942,62 @@ app.post(
     }
   }
 );
+
+app.post("/create-checkout-session", express.urlencoded({ extended: true }), async (req, res) => {
+  const stripe = getStripe();
+  if (!stripe) {
+    return res.status(503).json({
+      error:
+        "Stripe secret key is missing. Set STRIPE_SECRET_KEY in .env.",
+    });
+  }
+  try {
+    let priceId = "";
+    try {
+      priceId = await resolveCheckoutPriceId(stripe, req.body.lookup_key);
+    } catch (lookupErr) {
+      const le = /** @type {Error} */ (lookupErr);
+      return res.status(400).json({ error: le.message || "Invalid lookup_key" });
+    }
+    if (!priceId && !STRIPE_PRODUCT_ID) {
+      return res.status(400).json({
+        error:
+          "No Stripe price configured. Set STRIPE_PRICE_ID or STRIPE_PRICE_LOOKUP_KEY, or STRIPE_PRODUCT_ID + STRIPE_UNIT_AMOUNT_CENTS.",
+      });
+    }
+    const returnBase = pickCheckoutReturnBase(req.body.clientAppOrigin);
+    const sessionBase = {
+      mode: "payment",
+      success_url: `${returnBase}/calendar?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${returnBase}/calendar?checkout=cancel`,
+    };
+    let session;
+    if (priceId) {
+      try {
+        session = await stripe.checkout.sessions.create({
+          ...sessionBase,
+          line_items: [{ price: priceId, quantity: 1 }],
+        });
+      } catch (priceErr) {
+        const pmsg = String(/** @type {Error} */ (priceErr)?.message || "");
+        if (!/No such price/i.test(pmsg) || !STRIPE_PRODUCT_ID) throw priceErr;
+        session = await stripe.checkout.sessions.create({
+          ...sessionBase,
+          line_items: checkoutLineItemsFromPriceData(),
+        });
+      }
+    } else {
+      session = await stripe.checkout.sessions.create({
+        ...sessionBase,
+        line_items: checkoutLineItemsFromPriceData(),
+      });
+    }
+    return res.redirect(303, session.url);
+  } catch (err) {
+    const e = /** @type {Error} */ (err);
+    return res.status(400).json({ error: e.message || "Checkout failed" });
+  }
+});
 
 /** Paid-session summary for UI after Checkout redirect (does not consume download). */
 app.get("/api/calendar/checkout-summary", async (req, res) => {

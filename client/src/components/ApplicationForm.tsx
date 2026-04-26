@@ -88,6 +88,8 @@ const FONT_OPTIONS = [
 const API_URL =
   (import.meta.env.VITE_API_URL as string | undefined)?.trim() ||
   (import.meta.env.DEV ? 'http://localhost:3000' : '');
+const STRIPE_PRICE_LOOKUP_KEY =
+  (import.meta.env.VITE_STRIPE_PRICE_LOOKUP_KEY as string | undefined)?.trim() || '';
 
 function LayoutIconPortrait() {
   return (
@@ -167,6 +169,7 @@ function pickFont(value: string | undefined, fallback: string) {
 export function ApplicationForm() {
   const [searchParams, setSearchParams] = useSearchParams();
   const bulkFileInputRef = useRef<HTMLInputElement>(null);
+  const checkoutErrorRef = useRef<HTMLDivElement>(null);
   const [bulkDragActive, setBulkDragActive] = useState(false);
   const [year, setYear] = useState('2026');
   const [startMonth, setStartMonth] = useState('1');
@@ -798,6 +801,9 @@ export function ApplicationForm() {
       formData.append('holidayCalendars', JSON.stringify(holidayCalendars));
       formData.append('layoutMode', layoutMode);
       formData.append('clientAppOrigin', window.location.origin);
+      if (STRIPE_PRICE_LOOKUP_KEY) {
+        formData.append('lookup_key', STRIPE_PRICE_LOOKUP_KEY);
+      }
 
       // Images: images_0..11 = January–December (cover page has title only, no photo)
       monthPhotos.forEach((mp, i) => {
@@ -820,7 +826,11 @@ export function ApplicationForm() {
       }
       window.location.assign(data.url);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to generate calendar');
+      const message = err instanceof Error ? err.message : 'Failed to generate calendar';
+      setError(message);
+      window.requestAnimationFrame(() => {
+        checkoutErrorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
     } finally {
       setIsSubmitting(false);
     }
@@ -906,7 +916,11 @@ export function ApplicationForm() {
 
         <form onSubmit={handleSubmit} className="space-y-8">
           {error && (
-            <div className="p-4 bg-red-950/50 border border-red-800 rounded-lg text-red-200 text-sm">
+            <div
+              ref={checkoutErrorRef}
+              role="alert"
+              className="p-4 bg-red-950/50 border border-red-800 rounded-lg text-red-200 text-sm"
+            >
               {error}
             </div>
           )}
@@ -916,6 +930,13 @@ export function ApplicationForm() {
               Loading saved calendar…
             </div>
           )}
+
+          {/* Submit Button (top duplicate) */}
+          <div className="flex justify-end">
+            <Button type="submit" className="min-w-[180px] h-12 text-lg" disabled={isSubmitting}>
+              {isSubmitting ? 'Redirecting…' : 'Pay & download PDF'}
+            </Button>
+          </div>
 
           <Card className="p-4 lg:p-5">
             <CardHeader className="p-0 pb-3">
@@ -1073,8 +1094,8 @@ export function ApplicationForm() {
                 the day cell, with your own dates. Islamic and Jewish dates are approximate; extend years in
                 <code className="mx-1 text-sm bg-slate-800 px-1 py-0.5 rounded">holidays.js</code> on the server if needed.
               </CardDescription>
-              <p className="mt-3 text-sm font-medium leading-snug text-red-400" role="note">
-                ATTENTION! Religious rules are only as accurate as the precomputed range.
+              <p className="mt-3 text-sm font-medium leading-snug text-yellow-300" role="note">
+                ATTENTION! Religious days rules are only as accurate as the precomputed range.
               </p>
             </CardHeader>
             <CardContent className="p-0">
