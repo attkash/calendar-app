@@ -815,6 +815,47 @@ app.post("/generate", upload.any(), async (_req, res) => {
 });
 
 app.post(
+  "/api/calendar/free-generate",
+  upload.fields(calendarImageFields),
+  async (req, res) => {
+    const filesObj = req.files || {};
+    const rawFiles = [];
+    for (let i = 0; i < 12; i++) {
+      const arr = filesObj[`images_${i}`];
+      const f = Array.isArray(arr) && arr[0] ? arr[0] : null;
+      if (f) rawFiles.push(f);
+    }
+    try {
+      const pdfBuffer = await generateCalendarPdfBuffer(req.body || {}, rawFiles);
+      const filename = `calendar-free-${Date.now()}.pdf`;
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename="${filename}"`
+      );
+      return res.send(pdfBuffer);
+    } catch (err) {
+      const e = /** @type {Error} */ (err);
+      console.error("Free PDF generation error:", {
+        message: e?.message,
+        stack: e?.stack,
+        year: req?.body?.year,
+        startMonth: req?.body?.startMonth,
+      });
+      return res.status(500).json({ error: "Could not generate free PDF" });
+    } finally {
+      rawFiles.forEach((f) => {
+        try {
+          if (f.path && fs.existsSync(f.path)) fs.unlinkSync(f.path);
+        } catch {
+          /* ignore cleanup errors */
+        }
+      });
+    }
+  }
+);
+
+app.post(
   "/api/checkout/calendar-session",
   assignCalendarEntitlementId,
   calendarEntitlementUpload.fields(calendarImageFields),

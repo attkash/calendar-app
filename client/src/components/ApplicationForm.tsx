@@ -189,6 +189,7 @@ export function ApplicationForm() {
   const [holidayCalendars, setHolidayCalendars] = useState<string[]>([]);
   const [layoutMode, setLayoutMode] = useState<PdfLayoutMode>('landscape-spread');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isGeneratingFree, setIsGeneratingFree] = useState(false);
   const [error, setError] = useState<string | null>(null);
   /** After Stripe return: show receipt text (amount from Stripe when available). */
   const [paymentSuccessModal, setPaymentSuccessModal] = useState<{
@@ -777,38 +778,72 @@ export function ApplicationForm() {
     }
   };
 
+  const buildCalendarFormData = (includeLookupKey: boolean) => {
+    const formData = new FormData();
+    formData.append('year', year);
+    formData.append('startMonth', startMonth);
+    formData.append('events', JSON.stringify(
+      dateEvents
+        .filter(e => e.date && e.reason)
+        .map(e => ({ date: e.date, occasion: e.reason }))
+    ));
+    formData.append('weekStart', weekStart);
+    formData.append('yearFont', yearFont);
+    formData.append('monthFont', monthFont);
+    formData.append('weekDaysFont', weekDaysFont);
+    formData.append('datesFont', datesFont);
+    formData.append('datesFontSize', datesFontSize);
+    formData.append('dateNumberPosition', dateNumberPosition);
+    formData.append('holidayCalendars', JSON.stringify(holidayCalendars));
+    formData.append('layoutMode', layoutMode);
+    formData.append('clientAppOrigin', window.location.origin);
+    if (includeLookupKey && STRIPE_PRICE_LOOKUP_KEY) {
+      formData.append('lookup_key', STRIPE_PRICE_LOOKUP_KEY);
+    }
+    monthPhotos.forEach((mp, i) => {
+      if (mp.file) formData.append(`images_${i}`, mp.file);
+    });
+    return formData;
+  };
+
+  const handleFreeGenerate = async () => {
+    setError(null);
+    setIsGeneratingFree(true);
+    try {
+      const formData = buildCalendarFormData(false);
+      const res = await fetch(`${API_URL}/api/calendar/free-generate`, {
+        method: 'POST',
+        body: formData,
+      });
+      if (!res.ok) {
+        const data = (await res.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(data?.error || 'Could not generate free PDF');
+      }
+      const blob = await res.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = objectUrl;
+      a.download = `calendar-${year}-start-${startMonth}.pdf`;
+      a.click();
+      URL.revokeObjectURL(objectUrl);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to generate free PDF';
+      setError(message);
+      window.requestAnimationFrame(() => {
+        checkoutErrorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    } finally {
+      setIsGeneratingFree(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setIsSubmitting(true);
 
     try {
-      const formData = new FormData();
-      formData.append('year', year);
-      formData.append('startMonth', startMonth);
-      formData.append('events', JSON.stringify(
-        dateEvents
-          .filter(e => e.date && e.reason)
-          .map(e => ({ date: e.date, occasion: e.reason }))
-      ));
-      formData.append('weekStart', weekStart);
-      formData.append('yearFont', yearFont);
-      formData.append('monthFont', monthFont);
-      formData.append('weekDaysFont', weekDaysFont);
-      formData.append('datesFont', datesFont);
-      formData.append('datesFontSize', datesFontSize);
-      formData.append('dateNumberPosition', dateNumberPosition);
-      formData.append('holidayCalendars', JSON.stringify(holidayCalendars));
-      formData.append('layoutMode', layoutMode);
-      formData.append('clientAppOrigin', window.location.origin);
-      if (STRIPE_PRICE_LOOKUP_KEY) {
-        formData.append('lookup_key', STRIPE_PRICE_LOOKUP_KEY);
-      }
-
-      // Images: images_0..11 = January–December (cover page has title only, no photo)
-      monthPhotos.forEach((mp, i) => {
-        if (mp.file) formData.append(`images_${i}`, mp.file);
-      });
+      const formData = buildCalendarFormData(true);
 
       const res = await fetch(`${API_URL}/api/checkout/calendar-session`, {
         method: 'POST',
@@ -881,9 +916,23 @@ export function ApplicationForm() {
       )}
       <div className="max-w-[1200px] mx-auto">
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-8">
-          <Link to="/" className="text-slate-400 hover:text-white text-sm order-2 sm:order-1">
-            ← Home
-          </Link>
+          <div className="flex items-center gap-3 order-2 sm:order-1">
+            <Link to="/" className="text-slate-400 hover:text-white text-sm">
+              ← Home
+            </Link>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleFreeGenerate}
+              disabled={isGeneratingFree || isSubmitting}
+              title="Generate PDF for free (without Stripe)"
+              className="border-yellow-500/60 text-yellow-200 hover:bg-yellow-900/20"
+            >
+              <X className="size-4 mr-1.5" />
+              {isGeneratingFree ? 'Generating free PDF…' : 'Free PDF'}
+            </Button>
+          </div>
           <div className="flex flex-wrap gap-2 justify-end order-1 sm:order-2">
             {user ? (
               <Link to="/cabinet">
@@ -933,7 +982,7 @@ export function ApplicationForm() {
 
           {/* Submit Button (top duplicate) */}
           <div className="flex justify-end">
-            <Button type="submit" className="min-w-[180px] h-12 text-lg" disabled={isSubmitting}>
+            <Button type="submit" className="min-w-[180px] h-12 text-lg" disabled={isSubmitting || isGeneratingFree}>
               {isSubmitting ? 'Redirecting…' : 'Pay & download PDF'}
             </Button>
           </div>
@@ -1602,7 +1651,7 @@ export function ApplicationForm() {
 
           {/* Submit Button */}
           <div className="flex justify-end">
-            <Button type="submit" className="min-w-[180px] h-12 text-lg" disabled={isSubmitting}>
+            <Button type="submit" className="min-w-[180px] h-12 text-lg" disabled={isSubmitting || isGeneratingFree}>
               {isSubmitting ? 'Redirecting…' : 'Pay & download PDF'}
             </Button>
           </div>
