@@ -919,6 +919,119 @@ app.post("/generate", upload.any(), async (_req, res) => {
   });
 });
 
+const FREE_PDF_JOBS_DIR = path.join(UPLOADS_DIR, "free-pdf-jobs");
+
+/** @type {Map<string, { status: string, error?: string, pdfPath?: string, createdAt: number }>} */
+const freePdfJobs = new Map();
+
+function cleanupFreePdfJobs() {
+  const maxAge = 40 * 60 * 1000;
+  const now = Date.now();
+  for (const [id, job] of freePdfJobs) {
+    if (now - job.createdAt < maxAge) continue;
+    try {
+      if (job.pdfPath && fs.existsSync(job.pdfPath)) fs.unlinkSync(job.pdfPath);
+    } catch {
+      /* ignore */
+    }
+    freePdfJobs.delete(id);
+  }
+}
+
+async function runFreePdfJob(jobId, body, rawFiles) {
+  try {
+    const pdfBuffer = await generateCalendarPdfBuffer(body, rawFiles);
+    fs.mkdirSync(FREE_PDF_JOBS_DIR, { recursive: true });
+    const pdfPath = path.join(FREE_PDF_JOBS_DIR, `${jobId}.pdf`);
+    fs.writeFileSync(pdfPath, pdfBuffer);
+    const job = freePdfJobs.get(jobId);
+    if (job) {
+      job.status = "ready";
+      job.pdfPath = pdfPath;
+    }
+  } catch (err) {
+    const e = /** @type {Error} */ (err);
+    const job = freePdfJobs.get(jobId);
+    if (job) {
+      job.status = "failed";
+      job.error = String(e?.message || "failed").slice(0, 500);
+    }
+    console.error("Free PDF async job error:", jobId, e?.message);
+  } finally {
+    rawFiles.forEach((f) => {
+      try {
+        if (f.path && fs.existsSync(f.path)) fs.unlinkSync(f.path);
+      } catch {
+        /* ignore */
+      }
+    });
+  }
+}
+
+/**
+ * Start free PDF in the background — responds immediately (202) so proxies (e.g. Cloudflare ~100s) do not 502.
+ * Poll GET /api/calendar/free-generate/jobs/:id then GET .../pdf when status is ready.
+ * Note: in-memory jobs — use a single Render instance or sticky sessions; multiple instances need Redis etc.
+ */
+app.post(
+  "/api/calendar/free-generate-async",
+  upload.fields(calendarImageFields),
+  (req, res) => {
+    cleanupFreePdfJobs();
+    const jobId = crypto.randomUUID();
+    const filesObj = req.files || {};
+    const rawFiles = [];
+    for (let i = 0; i < 12; i++) {
+      const arr = filesObj[`images_${i}`];
+      const f = Array.isArray(arr) && arr[0] ? arr[0] : null;
+      if (f) rawFiles.push(f);
+    }
+    const body = { ...(req.body || {}) };
+    freePdfJobs.set(jobId, { status: "pending", createdAt: Date.now() });
+    void runFreePdfJob(jobId, body, rawFiles);
+    return res.status(202).json({
+      jobId,
+      pollUrl: `/api/calendar/free-generate/jobs/${jobId}`,
+      pdfUrl: `/api/calendar/free-generate/jobs/${jobId}/pdf`,
+    });
+  }
+);
+
+app.get("/api/calendar/free-generate/jobs/:id", (req, res) => {
+  const job = freePdfJobs.get(req.params.id);
+  if (!job) {
+    return res.status(404).json({ error: "Job not found" });
+  }
+  if (job.status === "pending") {
+    return res.json({ status: "pending" });
+  }
+  if (job.status === "failed") {
+    return res.json({ status: "failed", error: job.error || "Could not generate free PDF" });
+  }
+  return res.json({ status: "ready" });
+});
+
+app.get("/api/calendar/free-generate/jobs/:id/pdf", (req, res) => {
+  const job = freePdfJobs.get(req.params.id);
+  if (!job || job.status !== "ready" || !job.pdfPath) {
+    return res.status(404).send("PDF not ready");
+  }
+  if (!fs.existsSync(job.pdfPath)) {
+    return res.status(404).send("PDF missing");
+  }
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader(
+    "Content-Disposition",
+    'attachment; filename="calendar-free.pdf"'
+  );
+  res.sendFile(path.resolve(job.pdfPath), (err) => {
+    if (err) {
+      console.error("send free pdf:", err);
+      if (!res.headersSent) res.status(500).end();
+    }
+  });
+});
+
 app.post(
   "/api/calendar/free-generate",
   upload.fields(calendarImageFields),

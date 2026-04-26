@@ -854,6 +854,9 @@ export function ApplicationForm() {
   const handleFreeGenerate = async () => {
     setError(null);
     setIsGeneratingFree(true);
+    const overallMs = 15 * 60 * 1000;
+    const ac = new AbortController();
+    const abortTimer = window.setTimeout(() => ac.abort(), overallMs);
     try {
       const shrunk = await Promise.all(
         monthPhotos.map((mp) =>
@@ -861,12 +864,19 @@ export function ApplicationForm() {
         )
       );
       const formData = buildCalendarFormData(false, shrunk);
-      const pdfWaitMs = 15 * 60 * 1000;
-      const ac = new AbortController();
-      const abortTimer = window.setTimeout(() => ac.abort(), pdfWaitMs);
-      let res: Response;
+
+      const readErr = async (r: Response) => {
+        const ct = r.headers.get('content-type') || '';
+        if (ct.includes('application/json')) {
+          const data = (await r.json().catch(() => null)) as { error?: string } | null;
+          return data?.error || `HTTP ${r.status}`;
+        }
+        return (await r.text().catch(() => '')).slice(0, 200) || `HTTP ${r.status}`;
+      };
+
+      let startRes: Response;
       try {
-        res = await fetch(`${API_URL}/api/calendar/free-generate`, {
+        startRes = await fetch(`${API_URL}/api/calendar/free-generate-async`, {
           method: 'POST',
           body: formData,
           signal: ac.signal,
@@ -874,35 +884,67 @@ export function ApplicationForm() {
       } catch (e) {
         if (e instanceof DOMException && e.name === 'AbortError') {
           throw new Error(
-            `PDF generation took longer than ${Math.round(pdfWaitMs / 60000)} minutes and was stopped in the browser. The server may still be working — try again or reduce image size/count.`
+            `Stopped after ${Math.round(overallMs / 60000)} minutes. Try again with fewer or smaller images.`
           );
         }
         throw e;
-      } finally {
-        window.clearTimeout(abortTimer);
       }
-      if (!res.ok) {
-        const ct = res.headers.get('content-type') || '';
-        if (ct.includes('application/json')) {
-          const data = (await res.json().catch(() => null)) as { error?: string } | null;
-          throw new Error(data?.error || `Could not generate free PDF (${res.status})`);
-        }
-        const text = await res.text().catch(() => '');
-        if (res.status === 413) {
+
+      if (!startRes.ok) {
+        if (startRes.status === 413) {
           throw new Error('Photos are too large for the server limit. Try fewer or smaller images.');
         }
-        if (res.status === 502 || res.status === 504) {
+        if (startRes.status === 404) {
           throw new Error(
-            `Gateway ${res.status}: something in front of Node closed the connection before the PDF finished. On Render you cannot edit nginx; if the domain uses Cloudflare (orange cloud), try DNS-only for that hostname or bypass the proxy — free Cloudflare often cuts off around ~100s. Upgrade Render RAM if Chrome is killed (OOM). This build shrinks large photos before free PDF; you can tune VITE_FREE_PDF_MAX_IMAGE_EDGE (640–4096, default 1600).`
+            'Endpoint not found — deploy the latest server with /api/calendar/free-generate-async.'
           );
         }
-        throw new Error(
-          text
-            ? `Could not generate free PDF (${res.status}): ${text.slice(0, 200)}`
-            : `Could not generate free PDF (HTTP ${res.status}). Is /api/calendar/free-generate deployed on the server?`
-        );
+        throw new Error(`Could not start free PDF (${startRes.status}): ${await readErr(startRes)}`);
       }
-      const blob = await res.blob();
+
+      const start = (await startRes.json()) as { jobId?: string };
+      if (!start.jobId) {
+        throw new Error('Server did not return jobId.');
+      }
+
+      const pollUrl = `${API_URL}/api/calendar/free-generate/jobs/${start.jobId}`;
+      const pdfUrl = `${API_URL}/api/calendar/free-generate/jobs/${start.jobId}/pdf`;
+      const deadline = Date.now() + overallMs - 8000;
+      let ready = false;
+
+      while (Date.now() < deadline) {
+        const stRes = await fetch(pollUrl, { signal: ac.signal });
+        if (stRes.status === 404) {
+          throw new Error(
+            'Job not found — if you run several app instances, use one instance or a shared job store; polling may hit a different server.'
+          );
+        }
+        if (!stRes.ok) {
+          throw new Error(`Status check failed (${stRes.status}): ${await readErr(stRes)}`);
+        }
+        const st = (await stRes.json().catch(() => ({}))) as {
+          status?: string;
+          error?: string;
+        };
+        if (st.status === 'failed') {
+          throw new Error(st.error || 'PDF generation failed');
+        }
+        if (st.status === 'ready') {
+          ready = true;
+          break;
+        }
+        await new Promise((r) => window.setTimeout(r, 2000));
+      }
+
+      if (!ready) {
+        throw new Error('Timed out waiting for the PDF on the server. Try again or reduce image size/count.');
+      }
+
+      const pdfRes = await fetch(pdfUrl, { signal: ac.signal });
+      if (!pdfRes.ok) {
+        throw new Error(`Could not download PDF (${pdfRes.status}): ${await readErr(pdfRes)}`);
+      }
+      const blob = await pdfRes.blob();
       const objectUrl = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = objectUrl;
@@ -916,6 +958,7 @@ export function ApplicationForm() {
         checkoutErrorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
       });
     } finally {
+      window.clearTimeout(abortTimer);
       setIsGeneratingFree(false);
     }
   };
