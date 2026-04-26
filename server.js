@@ -180,7 +180,10 @@ const UPLOADS_DIR = path.join(__dirname, "uploads");
 if (!fs.existsSync(UPLOADS_DIR)) {
   fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 }
-const upload = multer({ dest: UPLOADS_DIR });
+const upload = multer({
+  dest: UPLOADS_DIR,
+  limits: { fileSize: 40 * 1024 * 1024 },
+});
 
 const ENTITLEMENTS_DIR = path.join(UPLOADS_DIR, "entitlements");
 if (!fs.existsSync(ENTITLEMENTS_DIR)) {
@@ -668,10 +671,16 @@ async function generateCalendarPdfBuffer(body, rawFiles) {
     const f = rawFiles.find((x) => x.fieldname === `images_${i}`);
     images[i] = f || null;
   }
-  const eventsInput = JSON.parse(body.events || "[]");
+  let eventsInput = [];
+  try {
+    const parsed = JSON.parse(String(body.events || "[]"));
+    eventsInput = Array.isArray(parsed) ? parsed : [];
+  } catch {
+    eventsInput = [];
+  }
   const eventsByMonthDay = {};
 
-  (Array.isArray(eventsInput) ? eventsInput : []).forEach((ev) => {
+  eventsInput.forEach((ev) => {
     if (ev && ev.date && ev.occasion) {
       const [y, m, d] = String(ev.date).split("-");
       if (m && d) {
@@ -788,23 +797,42 @@ async function generateCalendarPdfBuffer(body, rawFiles) {
     .replace("{{bodyClass}}", bodyClass)
     .replace("{{content}}", monthsHtml);
 
-  const browser = await puppeteer.launch({
-    args: ["--no-sandbox", "--disable-setuid-sandbox"],
-  });
+  const launchOpts = {
+    headless: true,
+    args: [
+      "--no-sandbox",
+      "--disable-setuid-sandbox",
+      "--disable-dev-shm-usage",
+      "--disable-gpu",
+    ],
+  };
+  if (process.env.PUPPETEER_EXECUTABLE_PATH) {
+    launchOpts.executablePath = process.env.PUPPETEER_EXECUTABLE_PATH;
+  }
 
-  const page = await browser.newPage();
+  const browser = await puppeteer.launch(launchOpts);
+  try {
+    const page = await browser.newPage();
+    const pdfTimeout =
+      Number.parseInt(process.env.PDF_GENERATION_TIMEOUT_MS || "", 10) || 120000;
+    await page.setContent(finalHtml, {
+      waitUntil: "load",
+      timeout: pdfTimeout,
+    });
 
-  await page.setContent(finalHtml, { waitUntil: "load", timeout: 30000 });
-
-  const pdfBuffer = await page.pdf({
-    format: "A4",
-    landscape: layoutMode === "landscape-spread",
-    printBackground: true,
-  });
-
-  await browser.close();
-
-  return pdfBuffer;
+    const pdfBuffer = await page.pdf({
+      format: "A4",
+      landscape: layoutMode === "landscape-spread",
+      printBackground: true,
+    });
+    return pdfBuffer;
+  } finally {
+    try {
+      await browser.close();
+    } catch {
+      /* ignore */
+    }
+  }
 }
 
 app.post("/generate", upload.any(), async (_req, res) => {
@@ -836,13 +864,21 @@ app.post(
       return res.send(pdfBuffer);
     } catch (err) {
       const e = /** @type {Error} */ (err);
+      const raw = String(e?.message || "unknown");
       console.error("Free PDF generation error:", {
-        message: e?.message,
+        message: raw,
         stack: e?.stack,
         year: req?.body?.year,
         startMonth: req?.body?.startMonth,
       });
-      return res.status(500).json({ error: "Could not generate free PDF" });
+      let hint = raw.slice(0, 400);
+      if (/Could not find Chrome|Failed to launch|chromium/i.test(raw)) {
+        hint =
+          "PDF engine (Chrome/Chromium) failed to start on the server. " +
+          "Install Chromium or set PUPPETEER_EXECUTABLE_PATH to a Chrome binary. " +
+          `Details: ${raw.slice(0, 200)}`;
+      }
+      return res.status(500).json({ error: hint || "Could not generate free PDF" });
     } finally {
       rawFiles.forEach((f) => {
         try {

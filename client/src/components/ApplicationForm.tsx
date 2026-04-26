@@ -816,8 +816,20 @@ export function ApplicationForm() {
         body: formData,
       });
       if (!res.ok) {
-        const data = (await res.json().catch(() => null)) as { error?: string } | null;
-        throw new Error(data?.error || 'Could not generate free PDF');
+        const ct = res.headers.get('content-type') || '';
+        if (ct.includes('application/json')) {
+          const data = (await res.json().catch(() => null)) as { error?: string } | null;
+          throw new Error(data?.error || `Could not generate free PDF (${res.status})`);
+        }
+        const text = await res.text().catch(() => '');
+        if (res.status === 413) {
+          throw new Error('Photos are too large for the server limit. Try fewer or smaller images.');
+        }
+        throw new Error(
+          text
+            ? `Could not generate free PDF (${res.status}): ${text.slice(0, 200)}`
+            : `Could not generate free PDF (HTTP ${res.status}). Is /api/calendar/free-generate deployed on the server?`
+        );
       }
       const blob = await res.blob();
       const objectUrl = URL.createObjectURL(blob);
