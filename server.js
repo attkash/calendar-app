@@ -1309,6 +1309,13 @@ const server = app.listen(PORT, HOST, () => {
   console.log(`Server running on http://${HOST}:${PORT}`);
 });
 
+// PDF generation (Puppeteer + many photos) can run several minutes; avoid premature socket close.
+const HTTP_SERVER_TIMEOUT_MS =
+  Number.parseInt(process.env.HTTP_SERVER_TIMEOUT_MS || "", 10) || 15 * 60 * 1000;
+server.timeout = HTTP_SERVER_TIMEOUT_MS;
+server.keepAliveTimeout = Math.min(120000, HTTP_SERVER_TIMEOUT_MS);
+server.headersTimeout = HTTP_SERVER_TIMEOUT_MS + 5000;
+
 server.on("error", (err) => {
   if (err.code === "EADDRINUSE") {
     console.error("\nPort " + PORT + " is already in use. Another instance may be running.");

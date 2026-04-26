@@ -91,6 +91,45 @@ const API_URL =
 const STRIPE_PRICE_LOOKUP_KEY =
   (import.meta.env.VITE_STRIPE_PRICE_LOOKUP_KEY as string | undefined)?.trim() || '';
 
+/** Long edge cap (px) before sending month images for free PDF — keeps Puppeteer under hosting timeouts (e.g. Render / Cloudflare). */
+const FREE_PDF_MAX_IMAGE_EDGE = (() => {
+  const n = Number.parseInt(String(import.meta.env.VITE_FREE_PDF_MAX_IMAGE_EDGE || ''), 10);
+  if (Number.isFinite(n) && n >= 640 && n <= 4096) return n;
+  return 1600;
+})();
+
+async function downscaleImageFileForPdf(file: File, maxEdge: number): Promise<File> {
+  if (!file.type.startsWith('image/') || file.size < 400_000) return file;
+  try {
+    const bmp = await createImageBitmap(file);
+    try {
+      const iw = bmp.width;
+      const ih = bmp.height;
+      const m = Math.max(iw, ih);
+      if (m <= maxEdge) return file;
+      const scale = maxEdge / m;
+      const w = Math.round(iw * scale);
+      const h = Math.round(ih * scale);
+      const canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return file;
+      ctx.drawImage(bmp, 0, 0, w, h);
+      const blob = await new Promise<Blob | null>((resolve) =>
+        canvas.toBlob((b) => resolve(b), 'image/jpeg', 0.82)
+      );
+      if (!blob || blob.size === 0) return file;
+      const base = file.name.replace(/\.[^.\\/]+$/, '') || 'photo';
+      return new File([blob], `${base}.jpg`, { type: 'image/jpeg' });
+    } finally {
+      bmp.close();
+    }
+  } catch {
+    return file;
+  }
+}
+
 function LayoutIconPortrait() {
   return (
     <svg viewBox="0 0 40 56" className="w-10 h-14 shrink-0 text-slate-400" aria-hidden>
@@ -778,7 +817,10 @@ export function ApplicationForm() {
     }
   };
 
-  const buildCalendarFormData = (includeLookupKey: boolean) => {
+  const buildCalendarFormData = (
+    includeLookupKey: boolean,
+    imageFiles?: (File | null)[]
+  ) => {
     const formData = new FormData();
     formData.append('year', year);
     formData.append('startMonth', startMonth);
@@ -800,8 +842,11 @@ export function ApplicationForm() {
     if (includeLookupKey && STRIPE_PRICE_LOOKUP_KEY) {
       formData.append('lookup_key', STRIPE_PRICE_LOOKUP_KEY);
     }
-    monthPhotos.forEach((mp, i) => {
-      if (mp.file) formData.append(`images_${i}`, mp.file);
+    const imgs =
+      imageFiles ??
+      monthPhotos.map((mp) => mp.file);
+    imgs.forEach((file, i) => {
+      if (file) formData.append(`images_${i}`, file);
     });
     return formData;
   };
@@ -810,11 +855,32 @@ export function ApplicationForm() {
     setError(null);
     setIsGeneratingFree(true);
     try {
-      const formData = buildCalendarFormData(false);
-      const res = await fetch(`${API_URL}/api/calendar/free-generate`, {
-        method: 'POST',
-        body: formData,
-      });
+      const shrunk = await Promise.all(
+        monthPhotos.map((mp) =>
+          mp.file ? downscaleImageFileForPdf(mp.file, FREE_PDF_MAX_IMAGE_EDGE) : null
+        )
+      );
+      const formData = buildCalendarFormData(false, shrunk);
+      const pdfWaitMs = 15 * 60 * 1000;
+      const ac = new AbortController();
+      const abortTimer = window.setTimeout(() => ac.abort(), pdfWaitMs);
+      let res: Response;
+      try {
+        res = await fetch(`${API_URL}/api/calendar/free-generate`, {
+          method: 'POST',
+          body: formData,
+          signal: ac.signal,
+        });
+      } catch (e) {
+        if (e instanceof DOMException && e.name === 'AbortError') {
+          throw new Error(
+            `PDF generation took longer than ${Math.round(pdfWaitMs / 60000)} minutes and was stopped in the browser. The server may still be working — try again or reduce image size/count.`
+          );
+        }
+        throw e;
+      } finally {
+        window.clearTimeout(abortTimer);
+      }
       if (!res.ok) {
         const ct = res.headers.get('content-type') || '';
         if (ct.includes('application/json')) {
@@ -824,6 +890,11 @@ export function ApplicationForm() {
         const text = await res.text().catch(() => '');
         if (res.status === 413) {
           throw new Error('Photos are too large for the server limit. Try fewer or smaller images.');
+        }
+        if (res.status === 502 || res.status === 504) {
+          throw new Error(
+            `Gateway ${res.status}: something in front of Node closed the connection before the PDF finished. On Render you cannot edit nginx; if the domain uses Cloudflare (orange cloud), try DNS-only for that hostname or bypass the proxy — free Cloudflare often cuts off around ~100s. Upgrade Render RAM if Chrome is killed (OOM). This build shrinks large photos before free PDF; you can tune VITE_FREE_PDF_MAX_IMAGE_EDGE (640–4096, default 1600).`
+          );
         }
         throw new Error(
           text
