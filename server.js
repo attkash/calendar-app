@@ -3,6 +3,7 @@ require("dotenv").config();
 const express = require("express");
 const multer = require("multer");
 const puppeteer = require("puppeteer");
+const sharp = require("sharp");
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
@@ -693,24 +694,92 @@ function guessMime(p) {
   return map[ext] || "image/jpeg";
 }
 
+/**
+ * Max width/height (px) for photos embedded in the PDF HTML. Smaller = less RAM in Node + Chromium
+ * (Render free tier is tight). Override: PDF_IMAGE_MAX_EDGE=1200
+ */
+function pdfImageMaxEdgePx() {
+  const n = Number.parseInt(process.env.PDF_IMAGE_MAX_EDGE || "", 10);
+  if (Number.isFinite(n) && n >= 480 && n <= 4000) return n;
+  return 1600;
+}
+
+function pdfJpegQuality() {
+  const n = Number.parseInt(process.env.PDF_JPEG_QUALITY || "", 10);
+  if (Number.isFinite(n) && n >= 55 && n <= 95) return n;
+  return 82;
+}
+
+function pdfImageOptimizeDisabled() {
+  return /^1|true|yes$/i.test(String(process.env.PDF_SKIP_IMAGE_OPTIMIZE || "").trim());
+}
+
+/**
+ * Downscale and recompress images before base64-inlining — avoids OOM on small hosts when
+ * users upload multi‑MB photos (multer allows up to 40MB per file).
+ * @param {import("multer").File} file
+ * @returns {Promise<string | null>} data URL or null
+ */
+async function fileToPdfDataUrl(file) {
+  if (!file || typeof file.path !== "string" || !fs.existsSync(file.path)) return null;
+  const mime0 =
+    file.mimetype && file.mimetype !== "application/octet-stream"
+      ? file.mimetype
+      : guessMime(file.originalname || file.path);
+  if (pdfImageOptimizeDisabled()) {
+    try {
+      const buf = fs.readFileSync(file.path);
+      return `data:${mime0};base64,${buf.toString("base64")}`;
+    } catch (e) {
+      console.error("Photo read error:", e.message);
+      return null;
+    }
+  }
+  const edge = pdfImageMaxEdgePx();
+  const quality = pdfJpegQuality();
+  try {
+    const buf = await sharp(file.path)
+      .rotate()
+      .resize({
+        width: edge,
+        height: edge,
+        fit: "inside",
+        withoutEnlargement: true,
+      })
+      .flatten({ background: "#ffffff" })
+      .jpeg({ quality, mozjpeg: true, chromaSubsampling: "4:2:0" })
+      .toBuffer();
+    return `data:image/jpeg;base64,${buf.toString("base64")}`;
+  } catch (e) {
+    console.error("PDF image optimize failed, using original:", e?.message || e);
+    try {
+      const buf = fs.readFileSync(file.path);
+      return `data:${mime0};base64,${buf.toString("base64")}`;
+    } catch (e2) {
+      console.error("Photo read error:", e2.message);
+      return null;
+    }
+  }
+}
+
+/** Build 12 slots (one per month) sequentially to limit peak memory vs Promise.all. */
+async function buildPdfImageDataUrls(rawFiles) {
+  const out = /** @type {(string | null)[]} */ (new Array(12).fill(null));
+  for (let i = 0; i < 12; i++) {
+    const f = rawFiles.find((x) => x.fieldname === `images_${i}`);
+    if (!f) continue;
+    out[i] = await fileToPdfDataUrl(f);
+  }
+  return out;
+}
+
 /** Chromium blocks file:// in setContent(); embed as data URL so PDF shows full photos */
-function getPhotoMarkup(images, index, layoutMode) {
+function getPhotoMarkupFromDataUrl(dataUrl, layoutMode) {
   const inline = layoutMode === "portrait-single";
   const imgClass = inline ? "photo photo--inline" : "photo photo--spread";
   const phClass = inline ? "photo-placeholder photo--inline" : "photo-placeholder photo--spread";
-  const file = images && images[index];
-  if (file && typeof file.path === "string" && fs.existsSync(file.path)) {
-    try {
-      const buf = fs.readFileSync(file.path);
-      const mime = file.mimetype && file.mimetype !== "application/octet-stream"
-        ? file.mimetype
-        : guessMime(file.originalname || file.path);
-      const b64 = buf.toString("base64");
-      const src = `data:${mime};base64,${b64}`;
-      return `<img src="${src}" class="${imgClass}" alt="" />`;
-    } catch (e) {
-      console.error("Photo read error:", e.message);
-    }
+  if (dataUrl) {
+    return `<img src="${dataUrl}" class="${imgClass}" alt="" />`;
   }
   return `<div class="${phClass}" role="img" aria-label="No photo">No photo</div>`;
 }
@@ -743,11 +812,7 @@ async function generateCalendarPdfBuffer(body, rawFiles) {
   const dateNumberMm = DATE_NUMBER_FONT_MM[dateNumberSize];
   const dateNumberPosition = normalizeDateNumberPosition(body.dateNumberPosition);
   const datePosClass = `date-pos-${dateNumberPosition}`;
-  const images = [];
-  for (let i = 0; i < 12; i++) {
-    const f = rawFiles.find((x) => x.fieldname === `images_${i}`);
-    images[i] = f || null;
-  }
+  const imageDataUrls = await buildPdfImageDataUrls(rawFiles);
   let eventsInput = [];
   try {
     const parsed = JSON.parse(String(body.events || "[]"));
@@ -848,7 +913,7 @@ async function generateCalendarPdfBuffer(body, rawFiles) {
           : "page page--month-combined";
       monthsHtml += `
         <div class="${combinedClass}">
-          <div class="month-combined-photo">${getPhotoMarkup(images, monthIndex, layoutMode)}</div>
+          <div class="month-combined-photo">${getPhotoMarkupFromDataUrl(imageDataUrls[monthIndex], layoutMode)}</div>
           <h2 class="month-combined-title" style="font-family: ${monthFont}, serif">${monthNames[monthIndex]} ${pageYear}</h2>
           <div class="cal-month-grid-root">${grid}</div>
         </div>
@@ -860,7 +925,7 @@ async function generateCalendarPdfBuffer(body, rawFiles) {
           : "page page--month-calendar";
       monthsHtml += `
         <div class="page page--month-photo">
-          <div class="month-photo-area">${getPhotoMarkup(images, monthIndex, layoutMode)}</div>
+          <div class="month-photo-area">${getPhotoMarkupFromDataUrl(imageDataUrls[monthIndex], layoutMode)}</div>
           <h2 class="month-spread-title" style="font-family: ${monthFont}, serif">${monthNames[monthIndex]} ${pageYear}</h2>
         </div>
         <div class="${calendarPageClass}">
