@@ -4,6 +4,7 @@ const express = require("express");
 const multer = require("multer");
 const puppeteer = require("puppeteer");
 const sharp = require("sharp");
+const { PDFDocument } = require("pdf-lib");
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
@@ -784,6 +785,111 @@ function getPhotoMarkupFromDataUrl(dataUrl, layoutMode) {
   return `<div class="${phClass}" role="img" aria-label="No photo">No photo</div>`;
 }
 
+const PDF_MONTH_CHUNK_COUNT = 6;
+const PDF_MONTHS_PER_CHUNK = 2;
+
+/**
+ * HTML for months at positions k in [kFrom, kToExclusive) (0 = first month of the calendar year;
+ * aligns with multer field images_0 … images_11).
+ */
+function buildCalendarMonthsHtmlFragment(
+  kFrom,
+  kToExclusive,
+  startMonth,
+  startYear,
+  weekStart,
+  layoutMode,
+  dateNumberSize,
+  monthNames,
+  weekDayNames,
+  eventsByMonthDay,
+  holidaySelected,
+  datesFont,
+  monthFont,
+  weekDaysFont,
+  dateNumberMm,
+  datePosClass,
+  imageDataUrls
+) {
+  let monthsHtml = "";
+  for (let k = kFrom; k < kToExclusive; k++) {
+    const offset = startMonth - 1 + k;
+    const monthIndex = offset % 12;
+    const pageYear = startYear + Math.floor(offset / 12);
+    const days = generateCalendar(pageYear, monthIndex, weekStart);
+    const holidayMap = getHolidayMapForYear(pageYear, holidaySelected);
+    const numWeeks = Math.ceil(days.length / 7);
+
+    let grid = `<div class="cal-month-grid">`;
+    grid += `<div class="cal-row cal-row--dow">`;
+    weekDayNames.forEach((name, col) => {
+      const wk = isWeekendColumn(col, weekStart);
+      const cls = wk
+        ? "cell cell-header cell-header--weekend"
+        : "cell cell-header";
+      grid += `<div class="${cls}" style="font-family: ${weekDaysFont}, sans-serif">${name}</div>`;
+    });
+    grid += `</div>`;
+
+    for (let w = 0; w < numWeeks; w++) {
+      grid += `<div class="cal-row">`;
+      for (let c = 0; c < 7; c++) {
+        const idx = w * 7 + c;
+        const day = days[idx] ?? "";
+        const wk = isWeekendColumn(c, weekStart);
+        const cellCls = `${wk ? "cell cell--weekend" : "cell"} ${datePosClass}`;
+        let eventHtml = "";
+        if (day !== "") {
+          const monthDayKey = `${String(monthIndex + 1).padStart(2, "0")}-${String(
+            day
+          ).padStart(2, "0")}`;
+          const userEvs = eventsByMonthDay[monthDayKey] || [];
+          eventHtml = buildEventHtmlForCell(userEvs, monthDayKey, holidayMap);
+        }
+        grid += `
+          <div class="${cellCls}" style="font-family: ${datesFont}, sans-serif">
+            <div class="cell-day-top">
+              <div class="date" style="font-size: ${dateNumberMm}mm; font-family: ${datesFont}, sans-serif">${day || ""}</div>
+            </div>
+            <div class="event">${eventHtml}</div>
+          </div>
+        `;
+      }
+      grid += `</div>`;
+    }
+    grid += `</div>`;
+
+    if (layoutMode === "portrait-single") {
+      const combinedClass =
+        dateNumberSize === 5
+          ? "page page--month-combined page--date-size-5-combined"
+          : "page page--month-combined";
+      monthsHtml += `
+        <div class="${combinedClass}">
+          <div class="month-combined-photo">${getPhotoMarkupFromDataUrl(imageDataUrls[k], layoutMode)}</div>
+          <h2 class="month-combined-title" style="font-family: ${monthFont}, serif">${monthNames[monthIndex]} ${pageYear}</h2>
+          <div class="cal-month-grid-root">${grid}</div>
+        </div>
+      `;
+    } else {
+      const calendarPageClass =
+        dateNumberSize === 5
+          ? "page page--month-calendar page--date-size-5"
+          : "page page--month-calendar";
+      monthsHtml += `
+        <div class="page page--month-photo">
+          <div class="month-photo-area">${getPhotoMarkupFromDataUrl(imageDataUrls[k], layoutMode)}</div>
+          <h2 class="month-spread-title" style="font-family: ${monthFont}, serif">${monthNames[monthIndex]} ${pageYear}</h2>
+        </div>
+        <div class="${calendarPageClass}">
+          <div class="cal-month-grid-root">${grid}</div>
+        </div>
+      `;
+    }
+  }
+  return monthsHtml;
+}
+
 /**
  * @param {Record<string, unknown>} body
  * @param {import("multer").File[]} rawFiles
@@ -852,92 +958,10 @@ async function generateCalendarPdfBuffer(body, rawFiles) {
     "December",
   ];
 
-  let monthsHtml = "";
-
   const weekDayNames =
     weekStart === "monday"
       ? ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
       : ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-
-  for (let k = 0; k < 12; k++) {
-    const offset = startMonth - 1 + k;
-    const monthIndex = offset % 12;
-    const pageYear = startYear + Math.floor(offset / 12);
-    const days = generateCalendar(pageYear, monthIndex, weekStart);
-    const holidayMap = getHolidayMapForYear(pageYear, holidaySelected);
-    const numWeeks = Math.ceil(days.length / 7);
-
-    let grid = `<div class="cal-month-grid">`;
-    grid += `<div class="cal-row cal-row--dow">`;
-    weekDayNames.forEach((name, col) => {
-      const wk = isWeekendColumn(col, weekStart);
-      const cls = wk
-        ? "cell cell-header cell-header--weekend"
-        : "cell cell-header";
-      grid += `<div class="${cls}" style="font-family: ${weekDaysFont}, sans-serif">${name}</div>`;
-    });
-    grid += `</div>`;
-
-    for (let w = 0; w < numWeeks; w++) {
-      grid += `<div class="cal-row">`;
-      for (let c = 0; c < 7; c++) {
-        const idx = w * 7 + c;
-        const day = days[idx] ?? "";
-        const wk = isWeekendColumn(c, weekStart);
-        const cellCls = `${wk ? "cell cell--weekend" : "cell"} ${datePosClass}`;
-        let eventHtml = "";
-        if (day !== "") {
-          const monthDayKey = `${String(monthIndex + 1).padStart(2, "0")}-${String(
-            day
-          ).padStart(2, "0")}`;
-          const userEvs = eventsByMonthDay[monthDayKey] || [];
-          eventHtml = buildEventHtmlForCell(userEvs, monthDayKey, holidayMap);
-        }
-        grid += `
-          <div class="${cellCls}" style="font-family: ${datesFont}, sans-serif">
-            <div class="cell-day-top">
-              <div class="date" style="font-size: ${dateNumberMm}mm; font-family: ${datesFont}, sans-serif">${day || ""}</div>
-            </div>
-            <div class="event">${eventHtml}</div>
-          </div>
-        `;
-      }
-      grid += `</div>`;
-    }
-    grid += `</div>`;
-
-    if (layoutMode === "portrait-single") {
-      const combinedClass =
-        dateNumberSize === 5
-          ? "page page--month-combined page--date-size-5-combined"
-          : "page page--month-combined";
-      monthsHtml += `
-        <div class="${combinedClass}">
-          <div class="month-combined-photo">${getPhotoMarkupFromDataUrl(imageDataUrls[monthIndex], layoutMode)}</div>
-          <h2 class="month-combined-title" style="font-family: ${monthFont}, serif">${monthNames[monthIndex]} ${pageYear}</h2>
-          <div class="cal-month-grid-root">${grid}</div>
-        </div>
-      `;
-    } else {
-      const calendarPageClass =
-        dateNumberSize === 5
-          ? "page page--month-calendar page--date-size-5"
-          : "page page--month-calendar";
-      monthsHtml += `
-        <div class="page page--month-photo">
-          <div class="month-photo-area">${getPhotoMarkupFromDataUrl(imageDataUrls[monthIndex], layoutMode)}</div>
-          <h2 class="month-spread-title" style="font-family: ${monthFont}, serif">${monthNames[monthIndex]} ${pageYear}</h2>
-        </div>
-        <div class="${calendarPageClass}">
-          <div class="cal-month-grid-root">${grid}</div>
-        </div>
-      `;
-    }
-  }
-
-  const finalHtml = template
-    .replace("{{bodyClass}}", bodyClass)
-    .replace("{{content}}", monthsHtml);
 
   const launchOpts = {
     headless: true,
@@ -952,22 +976,62 @@ async function generateCalendarPdfBuffer(body, rawFiles) {
     launchOpts.executablePath = process.env.PUPPETEER_EXECUTABLE_PATH;
   }
 
+  const pdfTimeout =
+    Number.parseInt(process.env.PDF_GENERATION_TIMEOUT_MS || "", 10) || 120000;
+
   const browser = await puppeteer.launch(launchOpts);
   try {
-    const page = await browser.newPage();
-    const pdfTimeout =
-      Number.parseInt(process.env.PDF_GENERATION_TIMEOUT_MS || "", 10) || 120000;
-    await page.setContent(finalHtml, {
-      waitUntil: "load",
-      timeout: pdfTimeout,
-    });
+    const mergedPdf = await PDFDocument.create();
+    for (let c = 0; c < PDF_MONTH_CHUNK_COUNT; c++) {
+      const kFrom = c * PDF_MONTHS_PER_CHUNK;
+      const kTo = kFrom + PDF_MONTHS_PER_CHUNK;
+      const monthsHtml = buildCalendarMonthsHtmlFragment(
+        kFrom,
+        kTo,
+        startMonth,
+        startYear,
+        weekStart,
+        layoutMode,
+        dateNumberSize,
+        monthNames,
+        weekDayNames,
+        eventsByMonthDay,
+        holidaySelected,
+        datesFont,
+        monthFont,
+        weekDaysFont,
+        dateNumberMm,
+        datePosClass,
+        imageDataUrls
+      );
+      const finalHtml = template
+        .replace("{{bodyClass}}", bodyClass)
+        .replace("{{content}}", monthsHtml);
 
-    const pdfBuffer = await page.pdf({
-      format: "A4",
-      landscape: layoutMode === "landscape-spread",
-      printBackground: true,
-    });
-    return pdfBuffer;
+      const page = await browser.newPage();
+      try {
+        await page.setContent(finalHtml, {
+          waitUntil: "load",
+          timeout: pdfTimeout,
+        });
+        const chunkBuf = await page.pdf({
+          format: "A4",
+          landscape: layoutMode === "landscape-spread",
+          printBackground: true,
+        });
+        const donor = await PDFDocument.load(chunkBuf);
+        const copied = await mergedPdf.copyPages(donor, donor.getPageIndices());
+        copied.forEach((p) => mergedPdf.addPage(p));
+      } finally {
+        try {
+          await page.close();
+        } catch {
+          /* ignore */
+        }
+      }
+    }
+    const outBytes = await mergedPdf.save();
+    return Buffer.from(outBytes);
   } finally {
     try {
       await browser.close();
