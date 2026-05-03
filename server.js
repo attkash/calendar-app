@@ -220,6 +220,67 @@ const calendarImageFields = Array.from({ length: 12 }, (_, i) => ({
   maxCount: 1,
 }));
 
+const MAX_CALENDAR_IMAGE_SLOTS = 12;
+
+/** @returns {number} max bytes per photo (default 12 MiB); override with MAX_CALENDAR_PHOTO_BYTES */
+function maxCalendarPhotoBytes() {
+  const n = Number.parseInt(process.env.MAX_CALENDAR_PHOTO_BYTES || "", 10);
+  if (Number.isFinite(n) && n >= 512 * 1024 && n <= 80 * 1024 * 1024) return n;
+  return 12 * 1024 * 1024;
+}
+
+/**
+ * @param {import("express").Request} req
+ * @returns {import("multer").File[]}
+ */
+function collectCalendarUploadFiles(req) {
+  const filesObj = req.files || {};
+  const rawFiles = [];
+  for (let i = 0; i < MAX_CALENDAR_IMAGE_SLOTS; i++) {
+    const arr = filesObj[`images_${i}`];
+    const f = Array.isArray(arr) && arr[0] ? arr[0] : null;
+    if (f) rawFiles.push(f);
+  }
+  return rawFiles;
+}
+
+/**
+ * @param {import("multer").File[]} rawFiles
+ * @returns {{ ok: true } | { ok: false, error: string }}
+ */
+function validateCalendarImageUploads(rawFiles) {
+  if (rawFiles.length > MAX_CALENDAR_IMAGE_SLOTS) {
+    return {
+      ok: false,
+      error: `Too many images (maximum ${MAX_CALENDAR_IMAGE_SLOTS}, one per month).`,
+    };
+  }
+  const maxB = maxCalendarPhotoBytes();
+  const maxMb = Math.max(1, Math.round(maxB / (1024 * 1024)));
+  for (const f of rawFiles) {
+    const s = typeof f.size === "number" && Number.isFinite(f.size) ? f.size : 0;
+    if (s > maxB) {
+      const name = (f.originalname && String(f.originalname).slice(0, 120)) || "photo";
+      return {
+        ok: false,
+        error: `Image "${name}" is too large (max ${maxMb} MB per file).`,
+      };
+    }
+  }
+  return { ok: true };
+}
+
+/** Remove temp files after a rejected upload */
+function unlinkMulterFiles(files) {
+  files.forEach((f) => {
+    try {
+      if (f.path && fs.existsSync(f.path)) fs.unlinkSync(f.path);
+    } catch {
+      /* ignore */
+    }
+  });
+}
+
 function resolvePicturesDir() {
   const fromEnv = String(process.env.PICTURES_DIR || "").trim();
   if (fromEnv) {
@@ -1107,14 +1168,13 @@ app.post(
   upload.fields(calendarImageFields),
   (req, res) => {
     cleanupFreePdfJobs();
-    const jobId = crypto.randomUUID();
-    const filesObj = req.files || {};
-    const rawFiles = [];
-    for (let i = 0; i < 12; i++) {
-      const arr = filesObj[`images_${i}`];
-      const f = Array.isArray(arr) && arr[0] ? arr[0] : null;
-      if (f) rawFiles.push(f);
+    const rawFiles = collectCalendarUploadFiles(req);
+    const check = validateCalendarImageUploads(rawFiles);
+    if (!check.ok) {
+      unlinkMulterFiles(rawFiles);
+      return res.status(400).json({ error: check.error });
     }
+    const jobId = crypto.randomUUID();
     const body = { ...(req.body || {}) };
     freePdfJobs.set(jobId, { status: "pending", createdAt: Date.now() });
     void runFreePdfJob(jobId, body, rawFiles);
@@ -1165,12 +1225,11 @@ app.post(
   "/api/calendar/free-generate",
   upload.fields(calendarImageFields),
   async (req, res) => {
-    const filesObj = req.files || {};
-    const rawFiles = [];
-    for (let i = 0; i < 12; i++) {
-      const arr = filesObj[`images_${i}`];
-      const f = Array.isArray(arr) && arr[0] ? arr[0] : null;
-      if (f) rawFiles.push(f);
+    const rawFiles = collectCalendarUploadFiles(req);
+    const check = validateCalendarImageUploads(rawFiles);
+    if (!check.ok) {
+      unlinkMulterFiles(rawFiles);
+      return res.status(400).json({ error: check.error });
     }
     try {
       const pdfBuffer = await generateCalendarPdfBuffer(req.body || {}, rawFiles);
@@ -1224,6 +1283,20 @@ app.post(
       });
     }
     try {
+      const rawFilesForCheck = collectCalendarUploadFiles(req);
+      const check = validateCalendarImageUploads(rawFilesForCheck);
+      if (!check.ok) {
+        try {
+          fs.rmSync(path.join(ENTITLEMENTS_DIR, entitlementId), {
+            recursive: true,
+            force: true,
+          });
+        } catch {
+          /* ignore */
+        }
+        return res.status(400).json({ error: check.error });
+      }
+
       const filesObj = req.files || {};
       const imageFilenames = [];
       for (let i = 0; i < 12; i++) {
