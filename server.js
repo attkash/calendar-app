@@ -776,6 +776,73 @@ function pdfImageOptimizeDisabled() {
   return /^1|true|yes$/i.test(String(process.env.PDF_SKIP_IMAGE_OPTIMIZE || "").trim());
 }
 
+/** JPEG quality when writing `*-compressed.jpg` before PDF (default 70). */
+function pdfDiskJpegQuality() {
+  const n = Number.parseInt(process.env.PDF_DISK_JPEG_QUALITY || "", 10);
+  if (Number.isFinite(n) && n >= 55 && n <= 95) return n;
+  return 70;
+}
+
+function pdfDiskPrecompressDisabled() {
+  return /^1|true|yes$/i.test(String(process.env.PDF_SKIP_DISK_PRECOMPRESS || "").trim());
+}
+
+/**
+ * Writes each upload to `path-compressed.jpg` (resize + JPEG) so Chromium never sees huge originals
+ * and we avoid a second full sharp pass in memory (read small file → base64 only).
+ * @param {import("multer").File[]} rawFiles
+ * @returns {Promise<{ files: import("multer").File[], diskCleanup: string[] }>}
+ */
+async function prepareCalendarFilesForPdf(rawFiles) {
+  if (pdfDiskPrecompressDisabled()) {
+    return { files: rawFiles, diskCleanup: [] };
+  }
+  const diskCleanup = [];
+  /** @type {import("multer").File[]} */
+  const out = [];
+  const edge = pdfImageMaxEdgePx();
+  const q = pdfDiskJpegQuality();
+  for (const f of rawFiles) {
+    if (!f || typeof f.path !== "string" || !fs.existsSync(f.path)) {
+      out.push(f);
+      continue;
+    }
+    const outPath = `${f.path}-compressed.jpg`;
+    try {
+      await sharp(f.path)
+        .rotate()
+        .resize({
+          width: edge,
+          height: edge,
+          fit: "inside",
+          withoutEnlargement: true,
+        })
+        .flatten({ background: "#ffffff" })
+        .jpeg({ quality: q, mozjpeg: true, chromaSubsampling: "4:2:0" })
+        .toFile(outPath);
+      diskCleanup.push(outPath);
+      let stSize = 0;
+      try {
+        stSize = fs.statSync(outPath).size;
+      } catch {
+        /* ignore */
+      }
+      out.push({
+        fieldname: f.fieldname,
+        path: outPath,
+        originalname: f.originalname,
+        mimetype: "image/jpeg",
+        size: stSize,
+        _pdfDiskPrecompressed: true,
+      });
+    } catch (e) {
+      console.error("PDF disk precompress failed:", f.fieldname, e?.message || e);
+      out.push(f);
+    }
+  }
+  return { files: out, diskCleanup };
+}
+
 /**
  * Downscale and recompress images before base64-inlining — avoids OOM on small hosts when
  * users upload multi‑MB photos (multer allows up to 40MB per file).
@@ -784,6 +851,15 @@ function pdfImageOptimizeDisabled() {
  */
 async function fileToPdfDataUrl(file) {
   if (!file || typeof file.path !== "string" || !fs.existsSync(file.path)) return null;
+  if (file._pdfDiskPrecompressed) {
+    try {
+      const buf = fs.readFileSync(file.path);
+      return `data:image/jpeg;base64,${buf.toString("base64")}`;
+    } catch (e) {
+      console.error("Photo read (disk-compressed) error:", e.message);
+      return null;
+    }
+  }
   const mime0 =
     file.mimetype && file.mimetype !== "application/octet-stream"
       ? file.mimetype
@@ -979,32 +1055,51 @@ async function generateCalendarPdfBuffer(body, rawFiles) {
   const dateNumberMm = DATE_NUMBER_FONT_MM[dateNumberSize];
   const dateNumberPosition = normalizeDateNumberPosition(body.dateNumberPosition);
   const datePosClass = `date-pos-${dateNumberPosition}`;
-  const imageDataUrls = await buildPdfImageDataUrls(rawFiles);
-  let eventsInput = [];
-  try {
-    const parsed = JSON.parse(String(body.events || "[]"));
-    eventsInput = Array.isArray(parsed) ? parsed : [];
-  } catch {
-    eventsInput = [];
-  }
-  const eventsByMonthDay = {};
-
-  eventsInput.forEach((ev) => {
-    if (ev && ev.date && ev.occasion) {
-      const [y, m, d] = String(ev.date).split("-");
-      if (m && d) {
-        const key = `${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
-        if (!eventsByMonthDay[key]) eventsByMonthDay[key] = [];
-        eventsByMonthDay[key].push({ date: ev.date, occasion: ev.occasion });
+  const { files: filesForPdf, diskCleanup } = await prepareCalendarFilesForPdf(rawFiles);
+  const cleanupCompressedDisks = () => {
+    for (const p of diskCleanup) {
+      try {
+        if (fs.existsSync(p)) fs.unlinkSync(p);
+      } catch {
+        /* ignore */
       }
     }
-  });
+  };
 
-  const holidaySelected = parseHolidayCalendarsFromBody(body);
+  let imageDataUrls;
+  try {
+    imageDataUrls = await buildPdfImageDataUrls(filesForPdf);
+  } catch (e) {
+    cleanupCompressedDisks();
+    throw e;
+  }
 
-  const template = fs.readFileSync(TEMPLATE_PATH, "utf-8");
+  try {
+    let eventsInput = [];
+    try {
+      const parsed = JSON.parse(String(body.events || "[]"));
+      eventsInput = Array.isArray(parsed) ? parsed : [];
+    } catch {
+      eventsInput = [];
+    }
+    const eventsByMonthDay = {};
 
-  const monthNames = [
+    eventsInput.forEach((ev) => {
+      if (ev && ev.date && ev.occasion) {
+        const [y, m, d] = String(ev.date).split("-");
+        if (m && d) {
+          const key = `${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
+          if (!eventsByMonthDay[key]) eventsByMonthDay[key] = [];
+          eventsByMonthDay[key].push({ date: ev.date, occasion: ev.occasion });
+        }
+      }
+    });
+
+    const holidaySelected = parseHolidayCalendarsFromBody(body);
+
+    const template = fs.readFileSync(TEMPLATE_PATH, "utf-8");
+
+    const monthNames = [
     "January",
     "February",
     "March",
@@ -1099,6 +1194,9 @@ async function generateCalendarPdfBuffer(body, rawFiles) {
     } catch {
       /* ignore */
     }
+  }
+  } finally {
+    cleanupCompressedDisks();
   }
 }
 
