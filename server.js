@@ -758,12 +758,13 @@ function guessMime(p) {
 
 /**
  * Max width/height (px) for photos embedded in the PDF HTML. Smaller = less RAM in Node + Chromium
- * (Render free tier is tight). Override: PDF_IMAGE_MAX_EDGE=1200
+ * (Render free tier is tight). Override: PDF_IMAGE_MAX_EDGE=1024
  */
 function pdfImageMaxEdgePx() {
   const n = Number.parseInt(process.env.PDF_IMAGE_MAX_EDGE || "", 10);
   if (Number.isFinite(n) && n >= 480 && n <= 4000) return n;
-  return 1600;
+  /** Default 1280: enough for A4 @ 150dpi; smaller base64 = less RAM in Node + Chromium on small hosts. */
+  return 1280;
 }
 
 function pdfJpegQuality() {
@@ -900,13 +901,16 @@ async function fileToPdfDataUrl(file) {
   }
 }
 
-/** Build 12 slots (one per month) sequentially to limit peak memory vs Promise.all. */
-async function buildPdfImageDataUrls(rawFiles) {
+/**
+ * Base64 data URLs only for slots [kFrom, kToExclusive) (e.g. two months per PDF chunk).
+ * Building all 12 at once kept huge strings in RAM and broke small hosts (e.g. Render) even with chunked PDF.
+ */
+async function buildPdfImageDataUrlsForSlotRange(rawFiles, kFrom, kToExclusive) {
   const out = /** @type {(string | null)[]} */ (new Array(12).fill(null));
-  for (let i = 0; i < 12; i++) {
-    const f = rawFiles.find((x) => x.fieldname === `images_${i}`);
+  for (let k = kFrom; k < kToExclusive; k++) {
+    const f = rawFiles.find((x) => x.fieldname === `images_${k}`);
     if (!f) continue;
-    out[i] = await fileToPdfDataUrl(f);
+    out[k] = await fileToPdfDataUrl(f);
   }
   return out;
 }
@@ -1066,14 +1070,6 @@ async function generateCalendarPdfBuffer(body, rawFiles) {
     }
   };
 
-  let imageDataUrls;
-  try {
-    imageDataUrls = await buildPdfImageDataUrls(filesForPdf);
-  } catch (e) {
-    cleanupCompressedDisks();
-    throw e;
-  }
-
   try {
     let eventsInput = [];
     try {
@@ -1141,6 +1137,11 @@ async function generateCalendarPdfBuffer(body, rawFiles) {
     for (let c = 0; c < PDF_MONTH_CHUNK_COUNT; c++) {
       const kFrom = c * PDF_MONTHS_PER_CHUNK;
       const kTo = kFrom + PDF_MONTHS_PER_CHUNK;
+      const imageDataUrls = await buildPdfImageDataUrlsForSlotRange(
+        filesForPdf,
+        kFrom,
+        kTo
+      );
       const monthsHtml = buildCalendarMonthsHtmlFragment(
         kFrom,
         kTo,
