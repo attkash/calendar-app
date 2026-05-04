@@ -1710,6 +1710,21 @@ export function ApplicationForm() {
                   </div>
                 ))}
               </div>
+
+              <div className="flex justify-center sm:justify-end pt-4 border-t border-slate-700/80 mt-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleFreeGenerate}
+                  disabled={isGeneratingFree || isSubmitting}
+                  title="Generate PDF for free (without Stripe)"
+                  className="border-yellow-500/60 text-yellow-200 hover:bg-yellow-900/20"
+                >
+                  <X className="size-4 mr-1.5" />
+                  {isGeneratingFree ? 'Generating free PDF…' : 'Free PDF'}
+                </Button>
+              </div>
             </CardContent>
           </Card>
 
