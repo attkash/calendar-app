@@ -1,4 +1,5 @@
-require("dotenv").config();
+const path = require("path");
+require("dotenv").config({ path: path.join(__dirname, ".env") });
 
 const express = require("express");
 const multer = require("multer");
@@ -6,7 +7,6 @@ const puppeteer = require("puppeteer");
 const sharp = require("sharp");
 const { PDFDocument } = require("pdf-lib");
 const fs = require("fs");
-const path = require("path");
 const crypto = require("crypto");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
