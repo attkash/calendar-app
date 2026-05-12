@@ -1,12 +1,27 @@
 const path = require("path");
-require("dotenv").config({ path: path.join(__dirname, ".env") });
+const fs = require("fs");
+
+(function loadRootEnv() {
+  const dotenv = require("dotenv");
+  /** Try several locations — `cwd` differs when started from another folder or monorepo root. */
+  const candidates = [
+    path.join(__dirname, ".env"),
+    path.join(process.cwd(), ".env"),
+  ];
+  for (const p of candidates) {
+    if (fs.existsSync(p)) {
+      dotenv.config({ path: p });
+      return;
+    }
+  }
+  dotenv.config();
+})();
 
 const express = require("express");
 const multer = require("multer");
 const puppeteer = require("puppeteer");
 const sharp = require("sharp");
 const { PDFDocument } = require("pdf-lib");
-const fs = require("fs");
 const crypto = require("crypto");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
@@ -81,8 +96,30 @@ function pickCheckoutReturnBase(clientOriginRaw) {
   return fallback;
 }
 
+/** Resolves secret from env or optional file (Docker / some hosts). Trims quotes/whitespace. */
+function readStripeSecretKey() {
+  let k = String(process.env.STRIPE_SECRET_KEY || "").trim();
+  if (
+    (k.startsWith('"') && k.endsWith('"')) ||
+    (k.startsWith("'") && k.endsWith("'"))
+  ) {
+    k = k.slice(1, -1).trim();
+  }
+  if (!k) {
+    const fp = String(process.env.STRIPE_SECRET_KEY_FILE || "").trim();
+    if (fp) {
+      try {
+        k = fs.readFileSync(path.resolve(fp), "utf8").trim();
+      } catch (e) {
+        console.error("[stripe] STRIPE_SECRET_KEY_FILE read failed:", e.message);
+      }
+    }
+  }
+  return k;
+}
+
 function getStripe() {
-  const key = process.env.STRIPE_SECRET_KEY;
+  const key = readStripeSecretKey();
   if (!key) return null;
   return new Stripe(key);
 }
@@ -1378,7 +1415,7 @@ app.post(
     if (!stripe) {
       return res.status(503).json({
         error:
-          "Stripe secret key is missing. Set STRIPE_SECRET_KEY in the environment or in a root .env file (see Stripe Dashboard → Developers → API keys).",
+          "Stripe secret key is missing. Add STRIPE_SECRET_KEY to the server environment (Render/Fly: Environment tab; local: .env next to server.js). Get keys at Stripe Dashboard → Developers → API keys. Restart the server after saving.",
       });
     }
     try {
@@ -1516,7 +1553,7 @@ app.post("/create-checkout-session", express.urlencoded({ extended: true }), asy
   if (!stripe) {
     return res.status(503).json({
       error:
-        "Stripe secret key is missing. Set STRIPE_SECRET_KEY in .env.",
+        "Stripe secret key is missing. Set STRIPE_SECRET_KEY in the server environment or .env next to server.js, then restart.",
     });
   }
   try {
@@ -1573,7 +1610,7 @@ app.get("/api/calendar/checkout-summary", async (req, res) => {
   if (!stripe) {
     return res.status(503).json({
       error:
-        "Stripe secret key is missing. Set STRIPE_SECRET_KEY in the environment or in a root .env file (see Stripe Dashboard → Developers → API keys).",
+        "Stripe secret key is missing. Set STRIPE_SECRET_KEY in the server environment (e.g. Render Environment) or .env next to server.js. See Stripe Dashboard → Developers → API keys.",
     });
   }
   const sessionId = req.query.session_id;
@@ -1618,7 +1655,7 @@ app.get("/api/calendar/download", async (req, res) => {
   if (!stripe) {
     return res.status(503).json({
       error:
-        "Stripe secret key is missing. Set STRIPE_SECRET_KEY in the environment or in a root .env file (see Stripe Dashboard → Developers → API keys).",
+        "Stripe secret key is missing. Set STRIPE_SECRET_KEY in the server environment (e.g. Render Environment) or .env next to server.js. See Stripe Dashboard → Developers → API keys.",
     });
   }
   const sessionId = req.query.session_id;
@@ -1721,6 +1758,14 @@ const HOST = process.env.HOST || "0.0.0.0";
 
 const server = app.listen(PORT, HOST, () => {
   console.log(`Server running on http://${HOST}:${PORT}`);
+  if (!readStripeSecretKey()) {
+    console.warn(
+      "[stripe] STRIPE_SECRET_KEY is not set (or empty). Paid checkout will return 503 until you set it.\n" +
+        "  • Local: .env in the project folder next to server.js, line STRIPE_SECRET_KEY=sk_...\n" +
+        "  • Render/Fly/Railway: Dashboard → Environment → add STRIPE_SECRET_KEY (no quotes).\n" +
+        "  • Optional: STRIPE_SECRET_KEY_FILE=/path/to/secret.txt with the key on the first line."
+    );
+  }
 });
 
 // PDF generation (Puppeteer + many photos) can run several minutes; avoid premature socket close.
