@@ -1,20 +1,27 @@
 const path = require("path");
 const fs = require("fs");
 
+/**
+ * Environment variables:
+ * - **Render / production:** set in the host dashboard (e.g. Render → Environment). They appear in
+ *   `process.env` before this file runs. Do not commit `.env` to git.
+ * - **Local dev:** put secrets in `.env` next to `server.js` (or cwd). `dotenv` loads that file into
+ *   `process.env` only if the file exists. `override: false` keeps host-provided vars (Render) if both exist.
+ */
 (function loadRootEnv() {
   const dotenv = require("dotenv");
-  /** Try several locations — `cwd` differs when started from another folder or monorepo root. */
+  const opts = { override: false };
   const candidates = [
     path.join(__dirname, ".env"),
     path.join(process.cwd(), ".env"),
   ];
   for (const p of candidates) {
     if (fs.existsSync(p)) {
-      dotenv.config({ path: p });
+      dotenv.config({ path: p, ...opts });
       return;
     }
   }
-  dotenv.config();
+  dotenv.config(opts);
 })();
 
 const express = require("express");
