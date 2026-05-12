@@ -46,7 +46,7 @@ function normalizeStripeId(raw) {
   return s.replace(/[.,;:!?]+$/g, "");
 }
 
-/** Set in .env — must match the same Stripe account + mode (test/live) as STRIPE_SECRET_KEY. */
+/** Set in .env — must match the same Stripe account + mode as the API key (sk_... or restricted rk_...). */
 const STRIPE_PRODUCT_ID = normalizeStripeId(process.env.STRIPE_PRODUCT_ID || "");
 const STRIPE_PRICE_ID = normalizeStripeId(process.env.STRIPE_PRICE_ID || "");
 const STRIPE_PRICE_LOOKUP_KEY = String(process.env.STRIPE_PRICE_LOOKUP_KEY || "").trim();
@@ -103,9 +103,11 @@ function pickCheckoutReturnBase(clientOriginRaw) {
   return fallback;
 }
 
-/** Resolves secret from env or optional file (Docker / some hosts). Trims quotes/whitespace. */
+/** Stripe secret (`sk_...`) or restricted (`rk_...`) key — same Bearer usage in the SDK. Not publishable (`pk_`). */
 function readStripeSecretKey() {
-  let k = String(process.env.STRIPE_SECRET_KEY || "").trim();
+  let k =
+    String(process.env.STRIPE_SECRET_KEY || "").trim() ||
+    String(process.env.STRIPE_RESTRICTED_KEY || "").trim();
   if (
     (k.startsWith('"') && k.endsWith('"')) ||
     (k.startsWith("'") && k.endsWith("'"))
@@ -122,7 +124,54 @@ function readStripeSecretKey() {
       }
     }
   }
+  if (k && /^pk_(test|live)_/.test(k)) {
+    return "";
+  }
   return k;
+}
+
+/** Startup hints when Stripe API key is missing or obviously wrong (no secret values logged). */
+function logStripeEnvHints() {
+  const raw =
+    process.env.STRIPE_SECRET_KEY != null && String(process.env.STRIPE_SECRET_KEY).trim() !== ""
+      ? process.env.STRIPE_SECRET_KEY
+      : process.env.STRIPE_RESTRICTED_KEY;
+  const trimmed = raw != null ? String(raw).trim() : "";
+  if (trimmed && /^pk_(test|live)_/.test(trimmed)) {
+    console.warn(
+      "[stripe] STRIPE_SECRET_KEY is set to a publishable key (pk_...). For the server use the Secret key (sk_...), a Restricted key (rk_...), or STRIPE_RESTRICTED_KEY=rk_... — from Stripe Dashboard → Developers → API keys."
+    );
+    return;
+  }
+  if (readStripeSecretKey()) return;
+
+  let msg =
+    "[stripe] No Stripe API key. Set STRIPE_SECRET_KEY to your sk_... or rk_... key (or STRIPE_RESTRICTED_KEY=rk_...). Paid checkout returns 503 until then.\n" +
+    "  • Local: .env next to server.js (no quotes).\n" +
+    "  • Optional file: STRIPE_SECRET_KEY_FILE=/absolute/path/to/file (first line = key).";
+
+  if (process.env.RENDER === "true") {
+    msg +=
+      "\n  • Render: Web Service → Environment → add STRIPE_SECRET_KEY (value sk_... or rk_...), Save, Manual Deploy.\n" +
+      "    Restricted keys (rk_): in Stripe when creating the key, allow permissions this app needs (e.g. Checkout Sessions, Customers, core Billing reads).\n" +
+      "    \"injected env (0) from .env\" only means no .env file; Dashboard variables must still define the key.";
+  } else {
+    msg +=
+      "\n  • Hosted: same variable names in your provider's Environment / Secrets.";
+  }
+
+  console.warn(msg);
+
+  const wrongCase = Object.keys(process.env).find(
+    (n) =>
+      (n.toLowerCase() === "stripe_secret_key" && n !== "STRIPE_SECRET_KEY") ||
+      (n.toLowerCase() === "stripe_restricted_key" && n !== "STRIPE_RESTRICTED_KEY")
+  );
+  if (wrongCase) {
+    console.warn(
+      `[stripe] Found env var "${wrongCase}" with wrong casing. Use STRIPE_SECRET_KEY or STRIPE_RESTRICTED_KEY exactly.`
+    );
+  }
 }
 
 function getStripe() {
@@ -1422,7 +1471,7 @@ app.post(
     if (!stripe) {
       return res.status(503).json({
         error:
-          "Stripe secret key is missing. Add STRIPE_SECRET_KEY to the server environment (Render/Fly: Environment tab; local: .env next to server.js). Get keys at Stripe Dashboard → Developers → API keys. Restart the server after saving.",
+          "Stripe API key is missing. Set STRIPE_SECRET_KEY (sk_... or rk_...) or STRIPE_RESTRICTED_KEY (rk_...) in the server environment or .env. See Stripe Dashboard → Developers → API keys. Restart after saving.",
       });
     }
     try {
@@ -1463,7 +1512,7 @@ app.post(
         return res.status(400).json({
           error:
             "Stripe is not configured for checkout. In the project root .env set one of: " +
-            "(1) STRIPE_PRICE_ID from the same Test/Live mode as your secret key, " +
+            "(1) STRIPE_PRICE_ID from the same Test/Live mode as your Stripe API key (sk_ or rk), " +
             "(2) STRIPE_PRICE_LOOKUP_KEY (and optional VITE_STRIPE_PRICE_LOOKUP_KEY on the client), or " +
             "(3) STRIPE_PRODUCT_ID plus STRIPE_UNIT_AMOUNT_CENTS for inline pricing.",
         });
@@ -1531,7 +1580,7 @@ app.post(
       if (noSuchPrice) {
         return res.status(400).json({
           error:
-            `Stripe cannot find price ${noSuchPrice[1]} for this secret key (wrong account or Test/Live mismatch). ` +
+            `Stripe cannot find price ${noSuchPrice[1]} for this API key (wrong account or Test/Live mismatch). ` +
             "Fix STRIPE_PRICE_ID in .env or remove it and use STRIPE_PRODUCT_ID + STRIPE_UNIT_AMOUNT_CENTS.",
         });
       }
@@ -1539,7 +1588,7 @@ app.post(
       if (noSuchProduct) {
         return res.status(400).json({
           error:
-            "Stripe cannot find STRIPE_PRODUCT_ID for this secret key. Use a product id from the same Stripe account and mode as STRIPE_SECRET_KEY.",
+            "Stripe cannot find STRIPE_PRODUCT_ID for this API key. Use a product id from the same Stripe account and mode as your sk_ or rk_ key.",
         });
       }
       console.error("Checkout session error:", {
@@ -1560,7 +1609,7 @@ app.post("/create-checkout-session", express.urlencoded({ extended: true }), asy
   if (!stripe) {
     return res.status(503).json({
       error:
-        "Stripe secret key is missing. Set STRIPE_SECRET_KEY in the server environment or .env next to server.js, then restart.",
+        "Stripe API key is missing. Set STRIPE_SECRET_KEY or STRIPE_RESTRICTED_KEY in the server environment or .env, then restart.",
     });
   }
   try {
@@ -1617,7 +1666,7 @@ app.get("/api/calendar/checkout-summary", async (req, res) => {
   if (!stripe) {
     return res.status(503).json({
       error:
-        "Stripe secret key is missing. Set STRIPE_SECRET_KEY in the server environment (e.g. Render Environment) or .env next to server.js. See Stripe Dashboard → Developers → API keys.",
+        "Stripe API key is missing. Set STRIPE_SECRET_KEY (sk_ or rk) or STRIPE_RESTRICTED_KEY in the server environment or .env. See Stripe Dashboard → Developers → API keys.",
     });
   }
   const sessionId = req.query.session_id;
@@ -1662,7 +1711,7 @@ app.get("/api/calendar/download", async (req, res) => {
   if (!stripe) {
     return res.status(503).json({
       error:
-        "Stripe secret key is missing. Set STRIPE_SECRET_KEY in the server environment (e.g. Render Environment) or .env next to server.js. See Stripe Dashboard → Developers → API keys.",
+        "Stripe API key is missing. Set STRIPE_SECRET_KEY (sk_ or rk) or STRIPE_RESTRICTED_KEY in the server environment or .env. See Stripe Dashboard → Developers → API keys.",
     });
   }
   const sessionId = req.query.session_id;
@@ -1765,13 +1814,14 @@ const HOST = process.env.HOST || "0.0.0.0";
 
 const server = app.listen(PORT, HOST, () => {
   console.log(`Server running on http://${HOST}:${PORT}`);
-  if (!readStripeSecretKey()) {
-    console.warn(
-      "[stripe] STRIPE_SECRET_KEY is not set (or empty). Paid checkout will return 503 until you set it.\n" +
-        "  • Local: .env in the project folder next to server.js, line STRIPE_SECRET_KEY=sk_...\n" +
-        "  • Render/Fly/Railway: Dashboard → Environment → add STRIPE_SECRET_KEY (no quotes).\n" +
-        "  • Optional: STRIPE_SECRET_KEY_FILE=/path/to/secret.txt with the key on the first line."
+  const stripeKey = readStripeSecretKey();
+  if (stripeKey && /^rk_(test|live)_/.test(stripeKey)) {
+    console.log(
+      "[stripe] Using a restricted key (rk_...). In Stripe → Developers → API keys → edit permissions: allow what this server needs (e.g. Checkout Sessions write, Customers read/write if used, Prices/Products read for checkout line items)."
     );
+  }
+  if (!stripeKey) {
+    logStripeEnvHints();
   }
 });
 
