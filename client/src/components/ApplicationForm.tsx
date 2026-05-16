@@ -290,12 +290,19 @@ export function ApplicationForm() {
 
     const checkoutKey = `${sessionId}:${entitlementId}`;
     const doneStorageKey = `checkout-download-done:${checkoutKey}`;
+    const processingStorageKey = `checkout-download-processing:${checkoutKey}`;
     if (sessionStorage.getItem(doneStorageKey)) {
       setSearchParams({}, { replace: true });
       return;
     }
-    if (checkoutDownloadKeyRef.current === checkoutKey) return;
+    if (
+      checkoutDownloadKeyRef.current === checkoutKey ||
+      sessionStorage.getItem(processingStorageKey)
+    ) {
+      return;
+    }
     checkoutDownloadKeyRef.current = checkoutKey;
+    sessionStorage.setItem(processingStorageKey, '1');
 
     (async () => {
       let formattedAmount: string | null = null;
@@ -324,14 +331,10 @@ export function ApplicationForm() {
       }
       setPaymentSuccessModal({ formattedAmount });
 
-      const downloadPdf = async (attempt = 0): Promise<void> => {
+      const downloadPdf = async (): Promise<void> => {
         const res = await fetch(
           `${API_URL}/api/calendar/download?session_id=${encodeURIComponent(sessionId)}&entitlement_id=${encodeURIComponent(entitlementId)}`
         );
-        if (res.status === 409 && attempt < 12) {
-          await new Promise((r) => setTimeout(r, 2500));
-          return downloadPdf(attempt + 1);
-        }
         if (!res.ok) {
           const data = (await res.json().catch(() => null)) as { error?: string } | null;
           throw new Error(data?.error || 'Download failed');
@@ -352,10 +355,11 @@ export function ApplicationForm() {
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Download failed');
       } finally {
+        sessionStorage.removeItem(processingStorageKey);
         setSearchParams({}, { replace: true });
       }
     })();
-  }, [searchParams, setSearchParams, year, startMonth]);
+  }, [searchParams, setSearchParams]);
 
   const fetchArchiveImage = useCallback(async (fileMeta: { name: string; path: string }) => {
     const rawUrl = `${API_URL}/api/pictures/raw?path=${encodeURIComponent(fileMeta.path)}`;

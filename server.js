@@ -323,8 +323,8 @@ if (!fs.existsSync(DELIVERED_PDFS_DIR)) {
   fs.mkdirSync(DELIVERED_PDFS_DIR, { recursive: true });
 }
 
-/** Prevents parallel PDF generation for the same entitlement (duplicate client requests). */
-const calendarDownloadsInFlight = new Set();
+/** One PDF build per entitlement — parallel requests share the same Promise. */
+const calendarDownloadPromises = new Map();
 
 function deliveredPdfPath(entitlementId) {
   return path.join(DELIVERED_PDFS_DIR, `${entitlementId}.pdf`);
@@ -338,6 +338,101 @@ function sendCalendarPdfResponse(res, entitlementId, pdfBuffer) {
     `attachment; filename="${filename}"`
   );
   return res.send(pdfBuffer);
+}
+
+function collectEntitlementRawFiles(ent, entitlementId) {
+  const entDir = path.join(ENTITLEMENTS_DIR, entitlementId);
+  const rawFiles = [];
+  for (let i = 0; i < 12; i++) {
+    const fn = ent.imageFilenames[i];
+    if (fn) {
+      const full = path.join(entDir, fn);
+      if (fs.existsSync(full)) {
+        rawFiles.push({
+          fieldname: `images_${i}`,
+          path: full,
+          originalname: fn,
+          mimetype: guessMime(fn),
+        });
+      }
+    }
+  }
+  return rawFiles;
+}
+
+function readDeliveredPdfBuffer(entitlementId) {
+  const cachedPdfPath = deliveredPdfPath(entitlementId);
+  if (!fs.existsSync(cachedPdfPath)) return null;
+  return fs.readFileSync(cachedPdfPath);
+}
+
+function writeDeliveredPdfBuffer(entitlementId, pdfBuffer) {
+  fs.mkdirSync(DELIVERED_PDFS_DIR, { recursive: true });
+  const cachedPdfPath = deliveredPdfPath(entitlementId);
+  fs.writeFileSync(cachedPdfPath, pdfBuffer);
+  return cachedPdfPath;
+}
+
+function cleanupEntitlementUploadDir(entitlementId) {
+  const entDir = path.join(ENTITLEMENTS_DIR, entitlementId);
+  if (!fs.existsSync(entDir)) return;
+  try {
+    fs.rmSync(entDir, { recursive: true, force: true });
+  } catch (e) {
+    console.error("Entitlement cleanup:", e.message);
+  }
+}
+
+/**
+ * Returns PDF bytes for a paid entitlement. Uses disk cache, single-flight build,
+ * and can rebuild from upload files if cache is missing.
+ */
+async function getDeliveredPdfBuffer(entitlementId, sessionId) {
+  const cached = readDeliveredPdfBuffer(entitlementId);
+  if (cached) return cached;
+
+  const existing = calendarDownloadPromises.get(entitlementId);
+  if (existing) return existing;
+
+  const buildPromise = (async () => {
+    const again = readDeliveredPdfBuffer(entitlementId);
+    if (again) return again;
+
+    const ent = dataStore.getDownloadEntitlement(entitlementId);
+    if (!ent) {
+      throw Object.assign(new Error("Entitlement not found"), { httpStatus: 404 });
+    }
+
+    if (!ent.paid) {
+      dataStore.markDownloadEntitlementPaid(entitlementId, sessionId);
+    }
+
+    const rawFiles = collectEntitlementRawFiles(ent, entitlementId);
+    const pdfBuffer = await generateCalendarPdfBuffer(ent.payload, rawFiles);
+
+    try {
+      writeDeliveredPdfBuffer(entitlementId, pdfBuffer);
+    } catch (e) {
+      console.error("Delivered PDF cache write:", e.message);
+      throw Object.assign(
+        new Error("Could not save PDF on server. Try again in a moment."),
+        { httpStatus: 500 }
+      );
+    }
+
+    dataStore.markDownloadEntitlementPaid(entitlementId, sessionId);
+    if (!ent.consumedAt) {
+      dataStore.markDownloadEntitlementConsumed(entitlementId);
+    }
+    cleanupEntitlementUploadDir(entitlementId);
+
+    return pdfBuffer;
+  })().finally(() => {
+    calendarDownloadPromises.delete(entitlementId);
+  });
+
+  calendarDownloadPromises.set(entitlementId, buildPromise);
+  return buildPromise;
 }
 
 const calendarEntitlementUpload = multer({
@@ -1796,74 +1891,23 @@ app.get("/api/calendar/download", async (req, res) => {
       return res.status(404).json({ error: "Entitlement not found" });
     }
 
-    const sameStripeSession = String(ent.stripeSessionId || "") === sessionId;
-    const cachedPdfPath = deliveredPdfPath(entitlementId);
-
-    if (ent.consumedAt) {
-      if (sameStripeSession && fs.existsSync(cachedPdfPath)) {
-        const cached = fs.readFileSync(cachedPdfPath);
-        return sendCalendarPdfResponse(res, entitlementId, cached);
-      }
-      return res.status(410).json({ error: "Download already used" });
-    }
-
-    if (calendarDownloadsInFlight.has(entitlementId)) {
-      return res.status(409).json({
-        error: "Download is already in progress. Please wait a moment and refresh.",
-      });
-    }
-    calendarDownloadsInFlight.add(entitlementId);
-
-    if (!ent.paid) {
-      dataStore.markDownloadEntitlementPaid(entitlementId, sessionId);
-    }
-
-    const entDir = path.join(ENTITLEMENTS_DIR, entitlementId);
-    const rawFiles = [];
-    for (let i = 0; i < 12; i++) {
-      const fn = ent.imageFilenames[i];
-      if (fn) {
-        const full = path.join(entDir, fn);
-        if (fs.existsSync(full)) {
-          rawFiles.push({
-            fieldname: `images_${i}`,
-            path: full,
-            originalname: fn,
-            mimetype: guessMime(fn),
-          });
-        }
+    if (ent.consumedAt && !readDeliveredPdfBuffer(entitlementId)) {
+      const rawFiles = collectEntitlementRawFiles(ent, entitlementId);
+      if (rawFiles.length === 0) {
+        return res.status(503).json({
+          error:
+            "PDF is no longer on the server (files expired after payment). Please contact support with your Stripe receipt.",
+        });
       }
     }
 
-    let pdfBuffer;
-    try {
-      pdfBuffer = await generateCalendarPdfBuffer(ent.payload, rawFiles);
-    } finally {
-      calendarDownloadsInFlight.delete(entitlementId);
-    }
-
-    try {
-      fs.writeFileSync(cachedPdfPath, pdfBuffer);
-    } catch (e) {
-      console.error("Delivered PDF cache write:", e.message);
-    }
-
-    if (!ent.paid || ent.stripeSessionId !== sessionId) {
-      dataStore.markDownloadEntitlementPaid(entitlementId, sessionId);
-    }
-    dataStore.markDownloadEntitlementConsumed(entitlementId);
-
-    if (fs.existsSync(entDir)) {
-      try {
-        fs.rmSync(entDir, { recursive: true, force: true });
-      } catch (e) {
-        console.error("Entitlement cleanup:", e.message);
-      }
-    }
-
+    const pdfBuffer = await getDeliveredPdfBuffer(entitlementId, sessionId);
     return sendCalendarPdfResponse(res, entitlementId, pdfBuffer);
   } catch (err) {
-    const e = /** @type {Error} */ (err);
+    const e = /** @type {Error & { httpStatus?: number } } */ (err);
+    if (e.httpStatus) {
+      return res.status(e.httpStatus).json({ error: e.message });
+    }
     console.error("Download error:", {
       message: e?.message,
       stack: e?.stack,
