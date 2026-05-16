@@ -55,18 +55,47 @@ const STRIPE_UNIT_AMOUNT_CENTS = Number.parseInt(
   10
 );
 const STRIPE_CURRENCY = (process.env.STRIPE_CURRENCY || "usd").toLowerCase();
-const PUBLIC_APP_URL = (
-  process.env.PUBLIC_APP_URL || "http://localhost:5173"
-).replace(/\/$/, "");
+const PUBLIC_APP_URL_FROM_ENV = String(process.env.PUBLIC_APP_URL || "")
+  .trim()
+  .replace(/\/$/, "");
+
+/** Origin of the incoming HTTP request (Render/nginx set X-Forwarded-*). */
+function getRequestAppOrigin(req) {
+  if (!req) return "";
+  const host = String(req.get("x-forwarded-host") || req.get("host") || "")
+    .split(",")[0]
+    .trim();
+  if (!host) return "";
+  let proto = String(req.get("x-forwarded-proto") || "")
+    .split(",")[0]
+    .trim();
+  if (!proto) proto = req.secure ? "https" : "http";
+  try {
+    const u = new URL(`${proto}://${host}`);
+    if (u.protocol !== "http:" && u.protocol !== "https:") return "";
+    return `${u.protocol}//${u.host}`.replace(/\/$/, "");
+  } catch {
+    return "";
+  }
+}
+
+/** Stripe success/cancel base URL: env PUBLIC_APP_URL, else request Host, else Vite dev default. */
+function resolvePublicAppUrl(req) {
+  if (PUBLIC_APP_URL_FROM_ENV) return PUBLIC_APP_URL_FROM_ENV;
+  const fromReq = getRequestAppOrigin(req);
+  if (fromReq) return fromReq;
+  return "http://localhost:5173";
+}
 
 /**
- * Checkout success/cancel URLs must match the site the user opened. Defaults to
- * PUBLIC_APP_URL; optional body field clientAppOrigin (window.location.origin)
- * is used when it is localhost/127.0.0.1, matches PUBLIC_APP_URL, or matches
- * STRIPE_ALLOWED_RETURN_ORIGINS (comma-separated full origins, e.g. https://www.example.com).
+ * Checkout success/cancel URLs must match the site the user opened. Fallback is
+ * resolvePublicAppUrl(req). Optional body field clientAppOrigin (window.location.origin)
+ * is used when it is localhost/127.0.0.1, matches the request Host, matches
+ * PUBLIC_APP_URL, or matches STRIPE_ALLOWED_RETURN_ORIGINS (comma-separated origins).
  */
-function pickCheckoutReturnBase(clientOriginRaw) {
-  const fallback = PUBLIC_APP_URL;
+function pickCheckoutReturnBase(clientOriginRaw, req) {
+  const fallback = resolvePublicAppUrl(req);
+  const requestOrigin = getRequestAppOrigin(req);
   const raw = String(clientOriginRaw || "").trim();
   if (!raw) return fallback;
   let u;
@@ -79,6 +108,7 @@ function pickCheckoutReturnBase(clientOriginRaw) {
   const origin = `${u.protocol}//${u.host}`.replace(/\/$/, "");
   const hn = u.hostname.toLowerCase();
   if (hn === "localhost" || hn === "127.0.0.1") return origin;
+  if (requestOrigin && origin === requestOrigin) return origin;
 
   let pub;
   try {
@@ -153,6 +183,7 @@ function logStripeEnvHints() {
   if (process.env.RENDER === "true") {
     msg +=
       "\n  • Render: Web Service → Environment → add STRIPE_SECRET_KEY (value sk_... or rk_...), Save, Manual Deploy.\n" +
+      "    Also set PUBLIC_APP_URL=https://your-domain.com so Stripe redirects after payment (not localhost:5173).\n" +
       "    Restricted keys (rk_): in Stripe when creating the key, allow permissions this app needs (e.g. Checkout Sessions, Customers, core Billing reads).\n" +
       "    \"injected env (0) from .env\" only means no .env file; Dashboard variables must still define the key.";
   } else {
@@ -269,6 +300,9 @@ function publicCalendar(c) {
 }
 
 const app = express();
+if (process.env.RENDER === "true" || process.env.NODE_ENV === "production") {
+  app.set("trust proxy", 1);
+}
 
 const TEMPLATE_PATH = path.join(__dirname, "template.html");
 const UPLOADS_DIR = path.join(__dirname, "uploads");
@@ -1538,7 +1572,7 @@ app.post(
         imageFilenames,
       });
 
-      const returnBase = pickCheckoutReturnBase(req.body.clientAppOrigin);
+      const returnBase = pickCheckoutReturnBase(req.body.clientAppOrigin, req);
       const sessionBase = {
         mode: "payment",
         metadata: {
@@ -1626,7 +1660,7 @@ app.post("/create-checkout-session", express.urlencoded({ extended: true }), asy
           "No Stripe price configured. Set STRIPE_PRICE_ID or STRIPE_PRICE_LOOKUP_KEY, or STRIPE_PRODUCT_ID + STRIPE_UNIT_AMOUNT_CENTS.",
       });
     }
-    const returnBase = pickCheckoutReturnBase(req.body.clientAppOrigin);
+    const returnBase = pickCheckoutReturnBase(req.body.clientAppOrigin, req);
     const sessionBase = {
       mode: "payment",
       success_url: `${returnBase}/calendar?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
@@ -1814,6 +1848,11 @@ const HOST = process.env.HOST || "0.0.0.0";
 
 const server = app.listen(PORT, HOST, () => {
   console.log(`Server running on http://${HOST}:${PORT}`);
+  if (!PUBLIC_APP_URL_FROM_ENV && process.env.NODE_ENV === "production") {
+    console.log(
+      "[stripe] PUBLIC_APP_URL is not set; checkout return URLs use the request Host (set PUBLIC_APP_URL to your public site URL if redirects are wrong)."
+    );
+  }
   const stripeKey = readStripeSecretKey();
   if (stripeKey && /^rk_(test|live)_/.test(stripeKey)) {
     console.log(
