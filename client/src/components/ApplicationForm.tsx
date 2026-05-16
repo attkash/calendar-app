@@ -209,6 +209,8 @@ export function ApplicationForm() {
   const [searchParams, setSearchParams] = useSearchParams();
   const bulkFileInputRef = useRef<HTMLInputElement>(null);
   const checkoutErrorRef = useRef<HTMLDivElement>(null);
+  /** Prevents duplicate /api/calendar/download when checkout effect re-runs (draft restore, Strict Mode). */
+  const checkoutDownloadKeyRef = useRef<string | null>(null);
   const [bulkDragActive, setBulkDragActive] = useState(false);
   const [year, setYear] = useState('2026');
   const [startMonth, setStartMonth] = useState('1');
@@ -286,7 +288,15 @@ export function ApplicationForm() {
       return;
     }
 
-    let cancelled = false;
+    const checkoutKey = `${sessionId}:${entitlementId}`;
+    const doneStorageKey = `checkout-download-done:${checkoutKey}`;
+    if (sessionStorage.getItem(doneStorageKey)) {
+      setSearchParams({}, { replace: true });
+      return;
+    }
+    if (checkoutDownloadKeyRef.current === checkoutKey) return;
+    checkoutDownloadKeyRef.current = checkoutKey;
+
     (async () => {
       let formattedAmount: string | null = null;
       try {
@@ -312,15 +322,16 @@ export function ApplicationForm() {
       } catch {
         /* summary optional */
       }
-      if (!cancelled) {
-        setPaymentSuccessModal({ formattedAmount });
-      }
+      setPaymentSuccessModal({ formattedAmount });
 
-      try {
+      const downloadPdf = async (attempt = 0): Promise<void> => {
         const res = await fetch(
           `${API_URL}/api/calendar/download?session_id=${encodeURIComponent(sessionId)}&entitlement_id=${encodeURIComponent(entitlementId)}`
         );
-        if (cancelled) return;
+        if (res.status === 409 && attempt < 12) {
+          await new Promise((r) => setTimeout(r, 2500));
+          return downloadPdf(attempt + 1);
+        }
         if (!res.ok) {
           const data = (await res.json().catch(() => null)) as { error?: string } | null;
           throw new Error(data?.error || 'Download failed');
@@ -332,21 +343,18 @@ export function ApplicationForm() {
         a.download = `calendar-${year}-start-${startMonth}.pdf`;
         a.click();
         URL.revokeObjectURL(objectUrl);
+      };
+
+      try {
+        await downloadPdf();
+        sessionStorage.setItem(doneStorageKey, '1');
         setError(null);
       } catch (e) {
-        if (!cancelled) {
-          setError(e instanceof Error ? e.message : 'Download failed');
-        }
+        setError(e instanceof Error ? e.message : 'Download failed');
       } finally {
-        if (!cancelled) {
-          setSearchParams({}, { replace: true });
-        }
+        setSearchParams({}, { replace: true });
       }
     })();
-
-    return () => {
-      cancelled = true;
-    };
   }, [searchParams, setSearchParams, year, startMonth]);
 
   const fetchArchiveImage = useCallback(async (fileMeta: { name: string; path: string }) => {

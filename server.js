@@ -315,8 +315,29 @@ const upload = multer({
 });
 
 const ENTITLEMENTS_DIR = path.join(UPLOADS_DIR, "entitlements");
+const DELIVERED_PDFS_DIR = path.join(ENTITLEMENTS_DIR, "_delivered");
 if (!fs.existsSync(ENTITLEMENTS_DIR)) {
   fs.mkdirSync(ENTITLEMENTS_DIR, { recursive: true });
+}
+if (!fs.existsSync(DELIVERED_PDFS_DIR)) {
+  fs.mkdirSync(DELIVERED_PDFS_DIR, { recursive: true });
+}
+
+/** Prevents parallel PDF generation for the same entitlement (duplicate client requests). */
+const calendarDownloadsInFlight = new Set();
+
+function deliveredPdfPath(entitlementId) {
+  return path.join(DELIVERED_PDFS_DIR, `${entitlementId}.pdf`);
+}
+
+function sendCalendarPdfResponse(res, entitlementId, pdfBuffer) {
+  const filename = `calendar-${entitlementId.slice(0, 8)}.pdf`;
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader(
+    "Content-Disposition",
+    `attachment; filename="${filename}"`
+  );
+  return res.send(pdfBuffer);
 }
 
 const calendarEntitlementUpload = multer({
@@ -1774,9 +1795,24 @@ app.get("/api/calendar/download", async (req, res) => {
     if (!ent) {
       return res.status(404).json({ error: "Entitlement not found" });
     }
+
+    const sameStripeSession = String(ent.stripeSessionId || "") === sessionId;
+    const cachedPdfPath = deliveredPdfPath(entitlementId);
+
     if (ent.consumedAt) {
+      if (sameStripeSession && fs.existsSync(cachedPdfPath)) {
+        const cached = fs.readFileSync(cachedPdfPath);
+        return sendCalendarPdfResponse(res, entitlementId, cached);
+      }
       return res.status(410).json({ error: "Download already used" });
     }
+
+    if (calendarDownloadsInFlight.has(entitlementId)) {
+      return res.status(409).json({
+        error: "Download is already in progress. Please wait a moment and refresh.",
+      });
+    }
+    calendarDownloadsInFlight.add(entitlementId);
 
     if (!ent.paid) {
       dataStore.markDownloadEntitlementPaid(entitlementId, sessionId);
@@ -1799,8 +1835,22 @@ app.get("/api/calendar/download", async (req, res) => {
       }
     }
 
-    const pdfBuffer = await generateCalendarPdfBuffer(ent.payload, rawFiles);
+    let pdfBuffer;
+    try {
+      pdfBuffer = await generateCalendarPdfBuffer(ent.payload, rawFiles);
+    } finally {
+      calendarDownloadsInFlight.delete(entitlementId);
+    }
 
+    try {
+      fs.writeFileSync(cachedPdfPath, pdfBuffer);
+    } catch (e) {
+      console.error("Delivered PDF cache write:", e.message);
+    }
+
+    if (!ent.paid || ent.stripeSessionId !== sessionId) {
+      dataStore.markDownloadEntitlementPaid(entitlementId, sessionId);
+    }
     dataStore.markDownloadEntitlementConsumed(entitlementId);
 
     if (fs.existsSync(entDir)) {
@@ -1811,13 +1861,7 @@ app.get("/api/calendar/download", async (req, res) => {
       }
     }
 
-    const filename = `calendar-${entitlementId.slice(0, 8)}.pdf`;
-    res.setHeader("Content-Type", "application/pdf");
-    res.setHeader(
-      "Content-Disposition",
-      `attachment; filename="${filename}"`
-    );
-    return res.send(pdfBuffer);
+    return sendCalendarPdfResponse(res, entitlementId, pdfBuffer);
   } catch (err) {
     const e = /** @type {Error} */ (err);
     console.error("Download error:", {
