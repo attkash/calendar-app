@@ -91,6 +91,17 @@ const API_URL =
 const STRIPE_PRICE_LOOKUP_KEY =
   (import.meta.env.VITE_STRIPE_PRICE_LOOKUP_KEY as string | undefined)?.trim() || '';
 
+const PATIENCE_HINT = 'please be patient, could take a minute';
+
+function ButtonBusyLabel({ status }: { status: string }) {
+  return (
+    <span className="flex flex-col items-center gap-0.5 leading-tight text-center">
+      <span>{status}</span>
+      <span className="text-[0.68rem] font-normal opacity-90 leading-snug">{PATIENCE_HINT}</span>
+    </span>
+  );
+}
+
 /** Long edge cap (px) before sending month images for free PDF — keeps Puppeteer under hosting timeouts (e.g. Render / Cloudflare). */
 const FREE_PDF_MAX_IMAGE_EDGE = (() => {
   const n = Number.parseInt(String(import.meta.env.VITE_FREE_PDF_MAX_IMAGE_EDGE || ''), 10);
@@ -1120,8 +1131,16 @@ export function ApplicationForm() {
 
           {/* Submit Button (top duplicate) */}
           <div className="flex justify-end">
-            <Button type="submit" className="min-w-[180px] h-12 text-lg" disabled={isSubmitting || isGeneratingFree}>
-              {isSubmitting ? 'Redirecting…' : 'Pay & download PDF'}
+            <Button
+              type="submit"
+              className={`min-w-[200px] text-lg ${isSubmitting ? 'min-h-14 h-auto py-2' : 'h-12'}`}
+              disabled={isSubmitting || isGeneratingFree}
+            >
+              {isSubmitting ? (
+                <ButtonBusyLabel status="Redirecting…" />
+              ) : (
+                'Pay & download PDF'
+              )}
             </Button>
           </div>
 
@@ -1591,12 +1610,20 @@ export function ApplicationForm() {
                   </div>
                   <Button
                     type="button"
-                    className="h-11 shrink-0 bg-success hover:bg-success-hover text-on-accent"
+                    className={`shrink-0 bg-success hover:bg-success-hover text-on-accent ${
+                      loadingArchive ? 'min-h-14 h-auto py-2' : 'h-11'
+                    }`}
                     onClick={loadPicturesFromArchive}
                     disabled={loadingArchive}
                   >
-                    <FolderOpen className="size-4 mr-2" />
-                    {loadingArchive ? 'Loading…' : 'Load from Pictures'}
+                    {loadingArchive ? (
+                      <ButtonBusyLabel status="Loading…" />
+                    ) : (
+                      <>
+                        <FolderOpen className="size-4 mr-2" />
+                        Load from Pictures
+                      </>
+                    )}
                   </Button>
                 </div>
                 <div className="flex flex-col gap-2 text-sm text-foreground">
@@ -1807,8 +1834,16 @@ export function ApplicationForm() {
 
           {/* Submit Button */}
           <div className="flex justify-end">
-            <Button type="submit" className="min-w-[180px] h-12 text-lg" disabled={isSubmitting || isGeneratingFree}>
-              {isSubmitting ? 'Redirecting…' : 'Pay & download PDF'}
+            <Button
+              type="submit"
+              className={`min-w-[200px] text-lg ${isSubmitting ? 'min-h-14 h-auto py-2' : 'h-12'}`}
+              disabled={isSubmitting || isGeneratingFree}
+            >
+              {isSubmitting ? (
+                <ButtonBusyLabel status="Redirecting…" />
+              ) : (
+                'Pay & download PDF'
+              )}
             </Button>
           </div>
         </form>
