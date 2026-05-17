@@ -1281,7 +1281,10 @@ export function ApplicationForm() {
                 the day cell, with your own dates. Islamic and Jewish dates are approximate; extend years in
                 <code className="mx-1 text-sm bg-surface border border-border px-1 py-0.5 rounded">holidays.js</code> on the server if needed.
               </CardDescription>
-              <p className="mt-3 text-sm font-medium leading-snug text-yellow-300" role="note">
+              <p
+                className="mt-3 rounded-lg border border-orange-200 bg-warning-bg px-3 py-2.5 text-sm font-semibold leading-snug text-warning"
+                role="note"
+              >
                 ATTENTION! Religious days rules are only as accurate as the precomputed range.
               </p>
             </CardHeader>
