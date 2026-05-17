@@ -1110,6 +1110,10 @@ export function ApplicationForm() {
         <div className="text-center mb-12">
           <h1 className="text-5xl lg:text-6xl font-semibold mb-4">Calendar Generator</h1>
           <p className="text-xl text-muted-foreground">Create your personalized calendar with photos and important dates</p>
+          <p className="mt-3 text-sm text-muted max-w-2xl mx-auto leading-relaxed">
+            For 2 dollars you will get a .pdf file you can print yourself. We are not collecting any of
+            your personal data.
+          </p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-8">
