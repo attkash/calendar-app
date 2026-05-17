@@ -7,6 +7,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
+import { requireAuth } from '../appset';
 
 const TOKEN_KEY = 'calendar_auth_token';
 
@@ -69,6 +70,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [logout]);
 
   useEffect(() => {
+    if (!requireAuth) {
+      setLoading(false);
+      return;
+    }
     refreshMe();
   }, [refreshMe]);
 

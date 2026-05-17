@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/
 import { RadioGroup, RadioGroupItem } from './ui/radio-group';
 import { Upload, X, Plus, FolderOpen, RefreshCw, LayoutDashboard, Save } from 'lucide-react';
 import { useAuth, authHeaders } from '../context/AuthContext';
+import { requireAuth } from '../appset';
 import type { DateNumberPosition, PdfLayoutMode, SavedCalendarFull } from '../types/calendar';
 
 interface MonthPhoto {
@@ -436,10 +437,15 @@ export function ApplicationForm() {
   }, []);
 
   useEffect(() => {
-    if (authLoading) return;
+    if (authLoading && requireAuth) return;
     if (!presetId) {
       setEditingPresetId(null);
       setPresetLoading(false);
+      return;
+    }
+    if (!requireAuth) {
+      setPresetLoading(false);
+      navigate('/calendar', { replace: true });
       return;
     }
     if (!token) {
@@ -775,6 +781,7 @@ export function ApplicationForm() {
   const handleSaveToAccount = async () => {
     setSaveErr(null);
     setSaveInfo(null);
+    if (!requireAuth) return;
     if (!token) {
       navigate('/login', { state: { from: location.pathname } });
       return;
@@ -1066,9 +1073,11 @@ export function ApplicationForm() {
       <div className="max-w-[1200px] mx-auto">
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-8">
           <div className="flex items-center gap-3 order-2 sm:order-1">
-            <Link to="/" className="text-muted hover:text-foreground text-sm">
-              ← Home
-            </Link>
+            {requireAuth ? (
+              <Link to="/" className="text-muted hover:text-foreground text-sm">
+                ← Home
+              </Link>
+            ) : null}
             <Button
               type="button"
               variant="outline"
@@ -1082,29 +1091,31 @@ export function ApplicationForm() {
               {isGeneratingFree ? 'Generating free PDF…' : 'Free PDF'}
             </Button>
           </div>
-          <div className="flex flex-wrap gap-2 justify-end order-1 sm:order-2">
-            {user ? (
-              <Link to="/cabinet">
-                <Button type="button" variant="outline" size="sm">
-                  <LayoutDashboard className="size-4 mr-2" />
-                  Account
-                </Button>
-              </Link>
-            ) : (
-              <>
-                <Link to="/login" state={{ from: location.pathname }}>
+          {requireAuth ? (
+            <div className="flex flex-wrap gap-2 justify-end order-1 sm:order-2">
+              {user ? (
+                <Link to="/cabinet">
                   <Button type="button" variant="outline" size="sm">
-                    Sign in
+                    <LayoutDashboard className="size-4 mr-2" />
+                    Account
                   </Button>
                 </Link>
-                <Link to="/register" state={{ from: location.pathname }}>
-                  <Button type="button" variant="outline" size="sm">
-                    Register
-                  </Button>
-                </Link>
-              </>
-            )}
-          </div>
+              ) : (
+                <>
+                  <Link to="/login" state={{ from: location.pathname }}>
+                    <Button type="button" variant="outline" size="sm">
+                      Sign in
+                    </Button>
+                  </Link>
+                  <Link to="/register" state={{ from: location.pathname }}>
+                    <Button type="button" variant="outline" size="sm">
+                      Register
+                    </Button>
+                  </Link>
+                </>
+              )}
+            </div>
+          ) : null}
         </div>
 
         <div className="text-center mb-12">
@@ -1148,9 +1159,10 @@ export function ApplicationForm() {
             </Button>
           </div>
 
-          <Card className="p-4 lg:p-5">
-            <CardHeader className="p-0 pb-3">
-              <CardTitle className="text-lg">Save to your account</CardTitle>
+          {requireAuth ? (
+            <Card className="p-4 lg:p-5">
+              <CardHeader className="p-0 pb-3">
+                <CardTitle className="text-lg">Save to your account</CardTitle>
               <CardDescription className="text-sm leading-relaxed">
                 {user
                   ? 'Saves dates and design (fonts, layout, week start, Pictures folder path) — not month photos. Add or load photos again before generating a PDF.'
@@ -1192,8 +1204,9 @@ export function ApplicationForm() {
                       : 'Save to account'}
                 </Button>
               </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          ) : null}
 
           <Card className="p-6 lg:p-8">
             <CardHeader className="p-0 pb-4">
