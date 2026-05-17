@@ -1145,13 +1145,22 @@ async function fileToPdfDataUrl(file) {
 }
 
 /**
- * Base64 data URLs only for slots [kFrom, kToExclusive) (e.g. two months per PDF chunk).
- * Building all 12 at once kept huge strings in RAM and broke small hosts (e.g. Render) even with chunked PDF.
+ * Base64 data URLs for calendar positions [kFrom, kToExclusive).
+ * Upload field images_0 … images_11 follow month names (0 = January … 11 = December), not
+ * calendar order — when startMonth ≠ January, map each position k to images_{monthIndex}.
  */
-async function buildPdfImageDataUrlsForSlotRange(rawFiles, kFrom, kToExclusive) {
+async function buildPdfImageDataUrlsForSlotRange(
+  rawFiles,
+  kFrom,
+  kToExclusive,
+  startMonth
+) {
   const out = /** @type {(string | null)[]} */ (new Array(12).fill(null));
+  let sm = parseInt(startMonth, 10);
+  if (!Number.isFinite(sm) || sm < 1 || sm > 12) sm = 1;
   for (let k = kFrom; k < kToExclusive; k++) {
-    const f = rawFiles.find((x) => x.fieldname === `images_${k}`);
+    const monthIndex = (sm - 1 + k) % 12;
+    const f = rawFiles.find((x) => x.fieldname === `images_${monthIndex}`);
     if (!f) continue;
     out[k] = await fileToPdfDataUrl(f);
   }
@@ -1173,8 +1182,8 @@ const PDF_MONTH_CHUNK_COUNT = 6;
 const PDF_MONTHS_PER_CHUNK = 2;
 
 /**
- * HTML for months at positions k in [kFrom, kToExclusive) (0 = first month of the calendar year;
- * aligns with multer field images_0 … images_11).
+ * HTML for months at positions k in [kFrom, kToExclusive) (k = 0 is the first printed month).
+ * Photos come from images_0 … images_11 keyed by calendar month (Jan … Dec), via imageDataUrls[k].
  */
 function buildCalendarMonthsHtmlFragment(
   kFrom,
@@ -1383,7 +1392,8 @@ async function generateCalendarPdfBuffer(body, rawFiles) {
       const imageDataUrls = await buildPdfImageDataUrlsForSlotRange(
         filesForPdf,
         kFrom,
-        kTo
+        kTo,
+        startMonth
       );
       const monthsHtml = buildCalendarMonthsHtmlFragment(
         kFrom,
