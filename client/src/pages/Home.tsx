@@ -8,11 +8,11 @@ export function Home() {
   const { user, loading } = useAuth();
 
   return (
-    <div className="min-h-screen bg-[#0b1628] text-white flex flex-col items-center justify-center px-6 py-16">
+    <div className="min-h-screen bg-background text-foreground flex flex-col items-center justify-center px-6 py-16">
       <div className="max-w-lg w-full text-center space-y-8">
         <div>
           <h1 className="text-4xl sm:text-5xl font-semibold mb-3">Calendar Generator</h1>
-          <p className="text-slate-300 text-lg">
+          <p className="text-muted-foreground text-lg">
             Build a personal calendar with photos and important dates. Sign in to reuse your settings next year.
           </p>
         </div>
@@ -22,7 +22,7 @@ export function Home() {
             <CardTitle className="text-xl">Get started</CardTitle>
             <CardDescription className="text-base">
               {user ? (
-                <>Signed in as <strong className="text-slate-200">{user.username}</strong>. Open your account or start a new calendar.</>
+                <>Signed in as <strong className="text-foreground">{user.username}</strong>. Open your account or start a new calendar.</>
               ) : (
                 <>Register or sign in — your account can store dates and font options to reuse later.</>
               )}

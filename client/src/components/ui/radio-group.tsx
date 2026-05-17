@@ -36,10 +36,10 @@ const RadioGroupItem = React.forwardRef<
       aria-checked={isChecked}
       id={id}
       onClick={() => context?.onValueChange(value)}
-      className={`aspect-square h-4 w-4 shrink-0 rounded-full border-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-[#122032] ${
+      className={`aspect-square h-4 w-4 shrink-0 rounded-full border-2 focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 focus:ring-offset-surface ${
         isChecked
-          ? "border-blue-400 bg-blue-500 shadow-[inset_0_0_0_3px_#122032]"
-          : "border-slate-400 bg-slate-900/60"
+          ? "border-accent bg-accent shadow-[inset_0_0_0_3px_#1e293b]"
+          : "border-muted bg-background/60"
       } ${className}`}
       {...props}
     />

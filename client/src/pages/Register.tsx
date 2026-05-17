@@ -47,7 +47,7 @@ export function Register() {
   };
 
   return (
-    <div className="min-h-screen bg-[#0b1628] text-white flex items-center justify-center px-4 py-12">
+    <div className="min-h-screen bg-background text-foreground flex items-center justify-center px-4 py-12">
       <Card className="w-full max-w-md p-6 lg:p-8">
         <CardHeader className="p-0 pb-4">
           <CardTitle className="text-2xl">Register</CardTitle>
@@ -89,14 +89,14 @@ export function Register() {
             <Button type="submit" className="w-full h-11 text-base" disabled={pending}>
               {pending ? 'Registering…' : 'Create account'}
             </Button>
-            <p className="text-sm text-slate-400 text-center">
+            <p className="text-sm text-muted text-center">
               Already have an account?{' '}
-              <Link to="/login" className="text-blue-300 hover:underline">
+              <Link to="/login" className="text-accent hover:underline">
                 Sign in
               </Link>
             </p>
             <p className="text-center">
-              <Link to="/" className="text-sm text-slate-400 hover:text-white">
+              <Link to="/" className="text-sm text-muted hover:text-foreground">
                 Home
               </Link>
             </p>

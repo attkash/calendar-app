@@ -1,10 +1,22 @@
 @import "tailwindcss";
 
+@theme {
+  --color-background: #0f172a;
+  --color-surface: #1e293b;
+  --color-accent: #8b5cf6;
+  --color-accent-hover: #7c3aed;
+  --color-success: #10b981;
+  --color-foreground: #f8fafc;
+  --color-muted: #94a3b8;
+  --color-muted-foreground: #cbd5e1;
+  --color-border: #334155;
+}
+
 @layer base {
   body {
     margin: 0;
     min-height: 100vh;
-    background-color: #0b1628;
-    color: #ffffff;
+    background-color: var(--color-background);
+    color: var(--color-foreground);
   }
 }

@@ -1,9 +1,10 @@
 import * as React from "react"
 
 const buttonVariants = {
-  default: "bg-gray-900 text-white hover:bg-gray-800",
-  destructive: "bg-red-600 text-white hover:bg-red-700",
-  outline: "border border-slate-500 bg-transparent text-white hover:bg-slate-800",
+  default: "bg-accent text-foreground hover:bg-accent-hover",
+  destructive: "bg-red-600 text-foreground hover:bg-red-700",
+  outline:
+    "border border-border bg-transparent text-foreground hover:bg-surface",
 }
 
 const sizeVariants = {
@@ -22,7 +23,7 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
   ({ className = "", variant = "default", size = "default", ...props }, ref) => (
     <button
       ref={ref}
-      className={`inline-flex items-center justify-center rounded-md font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-400 disabled:pointer-events-none disabled:opacity-50 ${buttonVariants[variant]} ${sizeVariants[size]} ${className}`}
+      className={`inline-flex items-center justify-center rounded-md font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:pointer-events-none disabled:opacity-50 ${buttonVariants[variant]} ${sizeVariants[size]} ${className}`}
       {...props}
     />
   )

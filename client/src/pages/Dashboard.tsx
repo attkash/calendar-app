@@ -72,22 +72,22 @@ export function Dashboard() {
 
   if (authLoading || (!token && loading)) {
     return (
-      <div className="min-h-screen bg-[#0b1628] text-white flex items-center justify-center">
-        <p className="text-slate-400">Loading…</p>
+      <div className="min-h-screen bg-background text-foreground flex items-center justify-center">
+        <p className="text-muted">Loading…</p>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#0b1628] text-white py-12 px-6 sm:px-10">
+    <div className="min-h-screen bg-background text-foreground py-12 px-6 sm:px-10">
       <div className="max-w-[900px] mx-auto space-y-8">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
             <h1 className="text-3xl font-semibold">Your account</h1>
-            <p className="text-slate-400 mt-1">
+            <p className="text-muted mt-1">
               {user ? (
                 <>
-                  Signed in as <span className="text-slate-200">{user.username}</span>
+                  Signed in as <span className="text-foreground">{user.username}</span>
                 </>
               ) : null}
             </p>
@@ -121,9 +121,9 @@ export function Dashboard() {
               <div className="mb-4 p-3 rounded-lg border border-red-800 bg-red-950/50 text-red-200 text-sm">{error}</div>
             )}
             {loading ? (
-              <p className="text-slate-400">Loading…</p>
+              <p className="text-muted">Loading…</p>
             ) : list.length === 0 ? (
-              <p className="text-slate-400">
+              <p className="text-muted">
                 No saves yet. Create a calendar and use &quot;Save to account&quot; on the generator page.
               </p>
             ) : (
@@ -131,11 +131,11 @@ export function Dashboard() {
                 {list.map((c) => (
                   <li
                     key={c.id}
-                    className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-lg border border-slate-600 bg-[#152238]/50"
+                    className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-lg border border-border bg-surface/50"
                   >
                     <div>
-                      <p className="font-medium text-white">{c.name}</p>
-                      <p className="text-sm text-slate-400">
+                      <p className="font-medium text-foreground">{c.name}</p>
+                      <p className="text-sm text-muted">
                         Year: {c.year} · starts: {MONTH_SHORT[c.startMonth - 1]}{' '}
                         · updated {new Date(c.updatedAt).toLocaleString('en-US')}
                       </p>
@@ -159,7 +159,7 @@ export function Dashboard() {
         </Card>
 
         <p className="text-center">
-          <Link to="/" className="text-slate-400 hover:text-white text-sm">
+          <Link to="/" className="text-muted hover:text-foreground text-sm">
             Home
           </Link>
         </p>

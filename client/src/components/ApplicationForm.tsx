@@ -132,7 +132,7 @@ async function downscaleImageFileForPdf(file: File, maxEdge: number): Promise<Fi
 
 function LayoutIconPortrait() {
   return (
-    <svg viewBox="0 0 40 56" className="w-10 h-14 shrink-0 text-slate-400" aria-hidden>
+    <svg viewBox="0 0 40 56" className="w-10 h-14 shrink-0 text-muted" aria-hidden>
       <rect x="2" y="2" width="36" height="52" rx="2" fill="none" stroke="currentColor" strokeWidth="1.5" />
       <rect x="6" y="6" width="28" height="14" rx="1" fill="currentColor" opacity="0.38" />
       <g opacity="0.5" stroke="currentColor" strokeWidth="0.9">
@@ -147,7 +147,7 @@ function LayoutIconPortrait() {
 /** Two A4 landscape pages stacked: photo page on top, calendar grid below (like the old icon turned 90°). */
 function LayoutIconLandscapeSpread() {
   return (
-    <svg viewBox="0 0 40 56" className="w-10 h-14 shrink-0 text-slate-400" aria-hidden>
+    <svg viewBox="0 0 40 56" className="w-10 h-14 shrink-0 text-muted" aria-hidden>
       <rect x="2" y="4" width="36" height="15" rx="2" fill="none" stroke="currentColor" strokeWidth="1.2" />
       <rect x="5" y="7" width="30" height="8" rx="1" fill="currentColor" opacity="0.35" />
       <rect x="2" y="23" width="36" height="15" rx="2" fill="none" stroke="currentColor" strokeWidth="1.2" />
@@ -1010,7 +1010,7 @@ export function ApplicationForm() {
   };
 
   return (
-    <div className="min-h-screen bg-[#0b1628] text-white py-12 px-6 sm:px-10 lg:px-16">
+    <div className="min-h-screen bg-background text-foreground py-12 px-6 sm:px-10 lg:px-16">
       {paymentSuccessModal != null && (
         <div
           className="fixed inset-0 z-[100] flex items-center justify-center bg-black/65 p-4"
@@ -1018,17 +1018,17 @@ export function ApplicationForm() {
           aria-modal="true"
           aria-labelledby="payment-success-title"
         >
-          <Card className="max-w-md w-full border-slate-600 bg-[#132032] text-white shadow-xl">
+          <Card className="max-w-md w-full border-border bg-surface text-foreground shadow-xl">
             <CardHeader>
               <CardTitle id="payment-success-title" className="text-xl">
                 Payment successful
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4 text-slate-200">
+            <CardContent className="space-y-4 text-muted-foreground">
               {paymentSuccessModal.formattedAmount ? (
                 <p className="text-base leading-relaxed">
                   Your card was charged{' '}
-                  <strong className="text-white text-lg font-semibold tabular-nums">
+                  <strong className="text-foreground text-lg font-semibold tabular-nums">
                     {paymentSuccessModal.formattedAmount}
                   </strong>
                   .
@@ -1038,7 +1038,7 @@ export function ApplicationForm() {
                   Check your card statement or Stripe receipt email for the exact amount.
                 </p>
               )}
-              <p className="text-sm text-slate-400">
+              <p className="text-sm text-muted">
                 Your calendar PDF should download automatically.
               </p>
               <Button
@@ -1055,7 +1055,7 @@ export function ApplicationForm() {
       <div className="max-w-[1200px] mx-auto">
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-8">
           <div className="flex items-center gap-3 order-2 sm:order-1">
-            <Link to="/" className="text-slate-400 hover:text-white text-sm">
+            <Link to="/" className="text-muted hover:text-foreground text-sm">
               ← Home
             </Link>
             <Button
@@ -1098,7 +1098,7 @@ export function ApplicationForm() {
 
         <div className="text-center mb-12">
           <h1 className="text-5xl lg:text-6xl font-semibold mb-4">Calendar Generator</h1>
-          <p className="text-xl text-slate-300">Create your personalized calendar with photos and important dates</p>
+          <p className="text-xl text-muted-foreground">Create your personalized calendar with photos and important dates</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-8">
@@ -1113,7 +1113,7 @@ export function ApplicationForm() {
           )}
 
           {presetLoading && (
-            <div className="p-4 border border-slate-600 rounded-lg text-slate-300 text-sm">
+            <div className="p-4 border border-border rounded-lg text-muted-foreground text-sm">
               Loading saved calendar…
             </div>
           )}
@@ -1136,7 +1136,7 @@ export function ApplicationForm() {
             </CardHeader>
             <CardContent className="p-0">
               {saveInfo && (
-                <div className="mb-3 text-sm text-emerald-300">{saveInfo}</div>
+                <div className="mb-3 text-sm text-success">{saveInfo}</div>
               )}
               {saveErr && (
                 <div className="mb-3 text-sm text-red-300">{saveErr}</div>
@@ -1184,8 +1184,8 @@ export function ApplicationForm() {
                 <label
                   className={`flex cursor-pointer gap-4 rounded-xl border-2 p-4 transition-colors ${
                     layoutMode === 'portrait-single'
-                      ? 'border-blue-500 bg-blue-950/25 ring-1 ring-blue-500/40'
-                      : 'border-slate-600 hover:border-slate-500 bg-[#152238]/40'
+                      ? 'border-accent bg-accent/15 ring-1 ring-accent/40'
+                      : 'border-border hover:border-border bg-surface/40'
                   }`}
                 >
                   <input
@@ -1198,17 +1198,17 @@ export function ApplicationForm() {
                   />
                   <LayoutIconPortrait />
                   <div className="min-w-0">
-                    <p className="font-semibold text-white">Portrait — one page</p>
-                    <p className="text-sm text-slate-400 mt-1">
-                      Photo and calendar grid on a single A4 <strong className="text-slate-300">portrait</strong> page per month.
+                    <p className="font-semibold text-foreground">Portrait — one page</p>
+                    <p className="text-sm text-muted mt-1">
+                      Photo and calendar grid on a single A4 <strong className="text-muted-foreground">portrait</strong> page per month.
                     </p>
                   </div>
                 </label>
                 <label
                   className={`flex cursor-pointer gap-4 rounded-xl border-2 p-4 transition-colors ${
                     layoutMode === 'landscape-spread'
-                      ? 'border-blue-500 bg-blue-950/25 ring-1 ring-blue-500/40'
-                      : 'border-slate-600 hover:border-slate-500 bg-[#152238]/40'
+                      ? 'border-accent bg-accent/15 ring-1 ring-accent/40'
+                      : 'border-border hover:border-border bg-surface/40'
                   }`}
                 >
                   <input
@@ -1221,9 +1221,9 @@ export function ApplicationForm() {
                   />
                   <LayoutIconLandscapeSpread />
                   <div className="min-w-0">
-                    <p className="font-semibold text-white">Landscape — two pages</p>
-                    <p className="text-sm text-slate-400 mt-1">
-                      Photo (with month title) on the first A4 <strong className="text-slate-300">landscape</strong> page; grid on the second — as now.
+                    <p className="font-semibold text-foreground">Landscape — two pages</p>
+                    <p className="text-sm text-muted mt-1">
+                      Photo (with month title) on the first A4 <strong className="text-muted-foreground">landscape</strong> page; grid on the second — as now.
                     </p>
                   </div>
                 </label>
@@ -1262,7 +1262,7 @@ export function ApplicationForm() {
                     id="startMonth"
                     value={startMonth}
                     onChange={(e) => setStartMonth(e.target.value)}
-                    className="flex h-12 w-full rounded-md border border-slate-600 bg-[#152238] text-white px-3 py-2 text-base focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="flex h-12 w-full rounded-md border border-border bg-surface text-foreground px-3 py-2 text-base focus:outline-none focus:ring-2 focus:ring-accent"
                   >
                     {MONTHS.map((name, idx) => (
                       <option key={name} value={String(idx + 1)}>{name}</option>
@@ -1279,7 +1279,7 @@ export function ApplicationForm() {
               <CardDescription className="text-base">
                 Optional sets of public and religious dates. In the PDF they are listed in <strong>red</strong> at the bottom of
                 the day cell, with your own dates. Islamic and Jewish dates are approximate; extend years in
-                <code className="mx-1 text-sm bg-slate-800 px-1 py-0.5 rounded">holidays.js</code> on the server if needed.
+                <code className="mx-1 text-sm bg-background px-1 py-0.5 rounded">holidays.js</code> on the server if needed.
               </CardDescription>
               <p className="mt-3 text-sm font-medium leading-snug text-yellow-300" role="note">
                 ATTENTION! Religious days rules are only as accurate as the precomputed range.
@@ -1290,15 +1290,15 @@ export function ApplicationForm() {
                 {HOLIDAY_CALENDAR_OPTIONS.map((opt) => (
                   <label
                     key={opt.id}
-                    className="flex cursor-pointer items-start gap-3 rounded-lg border border-slate-700/80 bg-[#0f1d32] p-3 text-left hover:border-slate-600"
+                    className="flex cursor-pointer items-start gap-3 rounded-lg border border-border/80 bg-background/80 p-3 text-left hover:border-border"
                   >
                     <input
                       type="checkbox"
                       checked={holidayCalendars.includes(opt.id)}
                       onChange={() => toggleHolidayCalendar(opt.id)}
-                      className="mt-0.5 size-4 shrink-0 rounded border-slate-500 bg-[#152238] text-blue-500 focus:ring-2 focus:ring-blue-500/40"
+                      className="mt-0.5 size-4 shrink-0 rounded border-border bg-surface text-accent focus:ring-2 focus:ring-accent/40"
                     />
-                    <span className="text-sm text-slate-200 leading-snug">{opt.label}</span>
+                    <span className="text-sm text-muted-foreground leading-snug">{opt.label}</span>
                   </label>
                 ))}
               </div>
@@ -1316,7 +1316,7 @@ export function ApplicationForm() {
                 <div className="min-w-0 space-y-8">
                   <div>
                     <Label className="text-base font-medium">Week starts with</Label>
-                    <p className="text-sm text-slate-400 mb-3">Choose Monday or Sunday as the first day of the week</p>
+                    <p className="text-sm text-muted mb-3">Choose Monday or Sunday as the first day of the week</p>
                     <RadioGroup value={weekStart} onValueChange={(value) => setWeekStart(value as 'monday' | 'sunday')} className="flex gap-6">
                       <label className="flex items-center gap-3 cursor-pointer">
                         <RadioGroupItem value="sunday" id="sunday" className="h-5 w-5" />
@@ -1329,9 +1329,9 @@ export function ApplicationForm() {
                     </RadioGroup>
                   </div>
 
-                  <div className="border-t border-slate-700/80 pt-8">
+                  <div className="border-t border-border/80 pt-8">
                     <Label className="text-base font-medium">Choose fonts</Label>
-                <p className="text-sm text-slate-400 mb-4">Font for year, month names, week days, and dates; date digits can be scaled separately for the PDF.</p>
+                <p className="text-sm text-muted mb-4">Font for year, month names, week days, and dates; date digits can be scaled separately for the PDF.</p>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                   <div className="space-y-2">
                     <Label htmlFor="yearFont" className="text-sm">Year font</Label>
@@ -1339,14 +1339,14 @@ export function ApplicationForm() {
                       id="yearFont"
                       value={yearFont}
                       onChange={(e) => setYearFont(e.target.value)}
-                      className="flex h-11 w-full rounded-md border border-slate-600 bg-[#152238] text-white px-3 py-2 text-base focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="flex h-11 w-full rounded-md border border-border bg-surface text-foreground px-3 py-2 text-base focus:outline-none focus:ring-2 focus:ring-accent"
                       style={{ fontFamily: yearFont }}
                     >
                       {FONT_OPTIONS.map(font => (
                         <option key={font} value={font} style={{ fontFamily: font }}>{font}</option>
                       ))}
                     </select>
-                    <div className="text-sm text-slate-300 p-2 border border-slate-600 rounded bg-[#152238]/60" style={{ fontFamily: yearFont }}>2026</div>
+                    <div className="text-sm text-muted-foreground p-2 border border-border rounded bg-surface/60" style={{ fontFamily: yearFont }}>2026</div>
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="monthFont" className="text-sm">Month font</Label>
@@ -1354,14 +1354,14 @@ export function ApplicationForm() {
                       id="monthFont"
                       value={monthFont}
                       onChange={(e) => setMonthFont(e.target.value)}
-                      className="flex h-11 w-full rounded-md border border-slate-600 bg-[#152238] text-white px-3 py-2 text-base focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="flex h-11 w-full rounded-md border border-border bg-surface text-foreground px-3 py-2 text-base focus:outline-none focus:ring-2 focus:ring-accent"
                       style={{ fontFamily: monthFont }}
                     >
                       {FONT_OPTIONS.map(font => (
                         <option key={font} value={font} style={{ fontFamily: font }}>{font}</option>
                       ))}
                     </select>
-                    <div className="text-sm text-slate-300 p-2 border border-slate-600 rounded bg-[#152238]/60" style={{ fontFamily: monthFont }}>January</div>
+                    <div className="text-sm text-muted-foreground p-2 border border-border rounded bg-surface/60" style={{ fontFamily: monthFont }}>January</div>
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="weekDaysFont" className="text-sm">Week days font</Label>
@@ -1369,14 +1369,14 @@ export function ApplicationForm() {
                       id="weekDaysFont"
                       value={weekDaysFont}
                       onChange={(e) => setWeekDaysFont(e.target.value)}
-                      className="flex h-11 w-full rounded-md border border-slate-600 bg-[#152238] text-white px-3 py-2 text-base focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="flex h-11 w-full rounded-md border border-border bg-surface text-foreground px-3 py-2 text-base focus:outline-none focus:ring-2 focus:ring-accent"
                       style={{ fontFamily: weekDaysFont }}
                     >
                       {FONT_OPTIONS.map(font => (
                         <option key={font} value={font} style={{ fontFamily: font }}>{font}</option>
                       ))}
                     </select>
-                    <div className="text-sm text-slate-300 p-2 border border-slate-600 rounded bg-[#152238]/60" style={{ fontFamily: weekDaysFont }}>Mon Tue Wed</div>
+                    <div className="text-sm text-muted-foreground p-2 border border-border rounded bg-surface/60" style={{ fontFamily: weekDaysFont }}>Mon Tue Wed</div>
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="datesFont" className="text-sm">Dates font</Label>
@@ -1384,14 +1384,14 @@ export function ApplicationForm() {
                       id="datesFont"
                       value={datesFont}
                       onChange={(e) => setDatesFont(e.target.value)}
-                      className="flex h-11 w-full rounded-md border border-slate-600 bg-[#152238] text-white px-3 py-2 text-base focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="flex h-11 w-full rounded-md border border-border bg-surface text-foreground px-3 py-2 text-base focus:outline-none focus:ring-2 focus:ring-accent"
                       style={{ fontFamily: datesFont }}
                     >
                       {FONT_OPTIONS.map(font => (
                         <option key={font} value={font} style={{ fontFamily: font }}>{font}</option>
                       ))}
                     </select>
-                    <div className="text-sm text-slate-300 p-2 border border-slate-600 rounded bg-[#152238]/60" style={{ fontFamily: datesFont }}>1 2 3 4 5</div>
+                    <div className="text-sm text-muted-foreground p-2 border border-border rounded bg-surface/60" style={{ fontFamily: datesFont }}>1 2 3 4 5</div>
                   </div>
                 </div>
                 <div className="mt-6 max-w-lg space-y-2">
@@ -1400,7 +1400,7 @@ export function ApplicationForm() {
                     id="datesFontSize"
                     value={datesFontSize}
                     onChange={(e) => setDatesFontSize(e.target.value)}
-                    className="flex h-11 w-full rounded-md border border-slate-600 bg-[#152238] text-white px-3 py-2 text-base focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="flex h-11 w-full rounded-md border border-border bg-surface text-foreground px-3 py-2 text-base focus:outline-none focus:ring-2 focus:ring-accent"
                   >
                     {DATE_NUMBER_SIZE_OPTIONS.map((opt) => (
                       <option key={opt.value} value={opt.value}>
@@ -1409,7 +1409,7 @@ export function ApplicationForm() {
                     ))}
                   </select>
                   <div
-                    className="text-slate-100 p-3 border border-slate-600 rounded bg-[#152238]"
+                    className="text-foreground p-3 border border-border rounded bg-surface"
                     style={{
                       fontFamily: datesFont,
                       fontSize: DATE_NUMBER_SIZE_OPTIONS.find((o) => o.value === datesFontSize)?.previewPx ?? 17,
@@ -1417,12 +1417,12 @@ export function ApplicationForm() {
                   >
                     15 16 17
                   </div>
-                  <p className="text-xs text-slate-400">
+                  <p className="text-xs text-muted">
                     In the PDF, size 4 sets the digit height to one quarter of each day cell; size 5 uses the full cell height (same proportions as the calendar grid).
                   </p>
                   <div className="space-y-3 pt-2">
                     <Label className="text-sm">Date number in cell</Label>
-                    <p className="text-xs text-slate-500">
+                    <p className="text-xs text-muted">
                       Where the day number sits inside each day cell (events stay in the lower part of the cell in the PDF).
                     </p>
                     <RadioGroup
@@ -1433,7 +1433,7 @@ export function ApplicationForm() {
                       {DATE_POSITION_OPTIONS.map((opt) => (
                         <label key={opt.value} className="flex items-center gap-2 cursor-pointer">
                           <RadioGroupItem value={opt.value} id={`date-pos-${opt.value}`} className="h-4 w-4" />
-                          <span className="text-sm text-slate-200">{opt.label}</span>
+                          <span className="text-sm text-muted-foreground">{opt.label}</span>
                         </label>
                       ))}
                     </RadioGroup>
@@ -1443,40 +1443,40 @@ export function ApplicationForm() {
                 </div>
 
                 <aside className="w-full max-w-[15.5rem] mx-auto lg:mx-0 lg:max-w-none shrink-0 lg:sticky lg:top-24">
-                  <div className="rounded-xl border border-slate-600 bg-[#0c1624] p-4 sm:p-5 shadow-inner space-y-5">
+                  <div className="rounded-xl border border-border bg-background p-4 sm:p-5 shadow-inner space-y-5">
                     <div>
-                      <p className="text-xs font-medium uppercase tracking-wide text-slate-500 mb-2">
+                      <p className="text-xs font-medium uppercase tracking-wide text-muted mb-2">
                         Year & month (PDF)
                       </p>
                       <p
-                        className="text-xl text-slate-100 tabular-nums leading-tight"
+                        className="text-xl text-foreground tabular-nums leading-tight"
                         style={{ fontFamily: yearFont }}
                       >
                         {year}
                       </p>
                       <p
-                        className="text-base text-slate-100 mt-1 leading-snug"
+                        className="text-base text-foreground mt-1 leading-snug"
                         style={{ fontFamily: monthFont }}
                       >
                         {MONTHS[Math.min(11, Math.max(0, (parseInt(startMonth, 10) || 1) - 1))]} {year}
                       </p>
-                      <p className="text-[11px] text-slate-500 mt-2 leading-snug">
-                        <strong className="text-slate-400">Year font</strong> sample above; <strong className="text-slate-400">Month font</strong> matches the month title line in the PDF (e.g. “January 2026”).
+                      <p className="text-[11px] text-muted mt-2 leading-snug">
+                        <strong className="text-muted">Year font</strong> sample above; <strong className="text-muted">Month font</strong> matches the month title line in the PDF (e.g. “January 2026”).
                       </p>
                     </div>
-                    <div className="border-t border-slate-700/80 pt-4">
-                      <p className="text-sm font-medium text-slate-200 mb-0.5">
+                    <div className="border-t border-border/80 pt-4">
+                      <p className="text-sm font-medium text-muted-foreground mb-0.5">
                         Day cell preview
                       </p>
-                      <p className="text-xs text-slate-500 mb-3 leading-snug">
+                      <p className="text-xs text-muted mb-3 leading-snug">
                         Weekday row + one day cell (dates font, size, and position). On-screen preview is approximate.
                       </p>
                       <div
-                        className="mx-auto flex w-[7.25rem] flex-col overflow-hidden rounded-md border border-slate-500 bg-[#152238] shadow-lg"
+                        className="mx-auto flex w-[7.25rem] flex-col overflow-hidden rounded-md border border-border bg-surface shadow-lg"
                         aria-hidden
                       >
                         <div
-                          className="border-b border-slate-600 bg-slate-800/95 px-2 py-2.5 text-center text-slate-100 leading-none shrink-0"
+                          className="border-b border-border bg-surface/95 px-2 py-2.5 text-center text-foreground leading-none shrink-0"
                           style={{
                             fontFamily: weekDaysFont,
                             fontSize: '0.8125rem',
@@ -1502,7 +1502,7 @@ export function ApplicationForm() {
                             }
                           >
                             <span
-                              className="tabular-nums text-white"
+                              className="tabular-nums text-foreground"
                               style={{
                                 fontFamily: datesFont,
                                 fontSize:
@@ -1513,13 +1513,13 @@ export function ApplicationForm() {
                               15
                             </span>
                           </div>
-                          <p className="mt-auto truncate border-t border-slate-600/60 pt-1 text-center text-[8px] leading-tight text-slate-400">
+                          <p className="mt-auto truncate border-t border-border/60 pt-1 text-center text-[8px] leading-tight text-muted">
                             Sample event
                           </p>
                         </div>
                       </div>
-                      <p className="text-xs text-slate-500 mt-3 text-center leading-snug">
-                        First grid column: <strong className="text-slate-400">{weekStart === 'monday' ? 'Monday' : 'Sunday'}</strong>
+                      <p className="text-xs text-muted mt-3 text-center leading-snug">
+                        First grid column: <strong className="text-muted">{weekStart === 'monday' ? 'Monday' : 'Sunday'}</strong>
                         {' '}({weekStart === 'monday' ? 'Mon' : 'Sun'}).
                       </p>
                     </div>
@@ -1534,23 +1534,23 @@ export function ApplicationForm() {
             <CardHeader className="p-0 pb-4">
               <CardTitle className="text-xl">Monthly Photos</CardTitle>
               <CardDescription className="text-base">
-                Drag and drop or choose <strong>multiple images</strong> at once (January → December), <strong>or</strong> load from the server <code className="text-sm bg-slate-700 text-slate-100 px-1 rounded">Pictures</code> folder.
+                Drag and drop or choose <strong>multiple images</strong> at once (January → December), <strong>or</strong> load from the server <code className="text-sm bg-surface text-foreground px-1 rounded">Pictures</code> folder.
                 Same month order no matter which month the PDF starts with.
               </CardDescription>
             </CardHeader>
             <CardContent className="p-0 space-y-4">
-              <div className="p-5 rounded-xl border-2 border-emerald-800/60 bg-emerald-950/25">
+              <div className="p-5 rounded-xl border-2 border-success/40 bg-success/10">
                 <div className="flex items-center gap-2 mb-2">
-                  <FolderOpen className="size-5 text-emerald-300" />
-                  <Label className="text-base font-semibold text-emerald-100">Pictures folder (on server)</Label>
+                  <FolderOpen className="size-5 text-success" />
+                  <Label className="text-base font-semibold text-foreground">Pictures folder (on server)</Label>
                 </div>
-                <p className="text-sm text-emerald-100/90 mb-4">
-                  Images are read from <code className="bg-slate-800 px-1 rounded border border-emerald-800 text-emerald-100">Pictures/</code> next to <code className="bg-slate-800 px-1 rounded border border-slate-600 text-slate-100">server.js</code>.
+                <p className="text-sm text-success/90 mb-4">
+                  Images are read from <code className="bg-background px-1 rounded border border-success/50 text-foreground">Pictures/</code> next to <code className="bg-background px-1 rounded border border-border text-foreground">server.js</code>.
                   Sorted A–Z by filename: file 1 → January, 2 → February, … 12 → December. Works together with manual uploads (see options).
                 </p>
                 <div className="flex flex-col sm:flex-row gap-3 sm:items-end mb-4">
                   <div className="flex-1 space-y-2 min-w-0">
-                    <Label htmlFor="archive-folder" className="text-sm font-medium text-emerald-100">
+                    <Label htmlFor="archive-folder" className="text-sm font-medium text-foreground">
                       Folder with images
                     </Label>
                     <div className="flex gap-2">
@@ -1558,7 +1558,7 @@ export function ApplicationForm() {
                         id="archive-folder"
                         value={archiveFolder}
                         onChange={(e) => setArchiveFolder(e.target.value)}
-                        className="flex h-11 min-w-0 flex-1 rounded-md border border-emerald-700 bg-[#152238] px-3 py-2 text-base text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                        className="flex h-11 min-w-0 flex-1 rounded-md border border-success bg-surface px-3 py-2 text-base text-foreground focus:outline-none focus:ring-2 focus:ring-success"
                       >
                         <option value="">Pictures (root)</option>
                         {archiveFolder &&
@@ -1574,7 +1574,7 @@ export function ApplicationForm() {
                       <Button
                         type="button"
                         variant="outline"
-                        className="h-11 shrink-0 border-emerald-600 bg-transparent text-emerald-100 hover:bg-emerald-950/80"
+                        className="h-11 shrink-0 border-success bg-transparent text-foreground hover:bg-success/15"
                         onClick={() => fetchPictureSubfolders()}
                         disabled={loadingFolders}
                         title="Refresh folder list"
@@ -1582,13 +1582,13 @@ export function ApplicationForm() {
                         <RefreshCw className={`size-4 ${loadingFolders ? 'animate-spin' : ''}`} />
                       </Button>
                     </div>
-                    <p className="text-xs text-emerald-200/70">
-                      Subfolders inside <code className="bg-slate-800 px-1 rounded border border-slate-600 text-slate-100">Pictures</code> on the server. Add a folder and press refresh if it does not appear.
+                    <p className="text-xs text-success/70">
+                      Subfolders inside <code className="bg-background px-1 rounded border border-border text-foreground">Pictures</code> on the server. Add a folder and press refresh if it does not appear.
                     </p>
                   </div>
                   <Button
                     type="button"
-                    className="h-11 shrink-0 bg-emerald-800 hover:bg-emerald-900 text-white"
+                    className="h-11 shrink-0 bg-success hover:bg-success/90 text-foreground"
                     onClick={loadPicturesFromArchive}
                     disabled={loadingArchive}
                   >
@@ -1596,13 +1596,13 @@ export function ApplicationForm() {
                     {loadingArchive ? 'Loading…' : 'Load from Pictures'}
                   </Button>
                 </div>
-                <div className="flex flex-col gap-2 text-sm text-emerald-100">
+                <div className="flex flex-col gap-2 text-sm text-foreground">
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input
                       type="checkbox"
                       checked={archiveReplaceAll}
                       onChange={(e) => setArchiveReplaceAll(e.target.checked)}
-                      className="rounded border-slate-500 bg-[#152238]"
+                      className="rounded border-border bg-surface"
                     />
                     Replace all 12 month slots (uncheck to only fill empty months)
                   </label>
@@ -1611,10 +1611,10 @@ export function ApplicationForm() {
 
               <div className="space-y-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <p className="text-sm font-medium text-slate-200">
+                  <p className="text-sm font-medium text-muted-foreground">
                     {monthPhotos.filter((p) => p.file).length}/{MONTH_SLOT_COUNT} images added
                   </p>
-                  <p className="text-xs text-slate-400 max-w-xl">
+                  <p className="text-xs text-muted max-w-xl">
                     First file → January, second → February, … (standard file picker; no folder picker required.)
                   </p>
                 </div>
@@ -1632,8 +1632,8 @@ export function ApplicationForm() {
                   aria-label="Drop zone for multiple month images"
                   className={`rounded-xl border-2 border-dashed px-6 py-10 text-center transition-colors ${
                     bulkDragActive
-                      ? 'border-blue-400 bg-[#152238]/90'
-                      : 'border-slate-500 bg-[#152238]/40 hover:border-slate-400'
+                      ? 'border-accent bg-surface/90'
+                      : 'border-border bg-surface/40 hover:border-muted'
                   }`}
                   onDragEnter={(e) => {
                     e.preventDefault();
@@ -1658,13 +1658,13 @@ export function ApplicationForm() {
                     }
                   }}
                 >
-                  <Upload className="size-12 mx-auto text-slate-400 mb-3" aria-hidden />
-                  <p className="text-slate-200 font-medium mb-1">Drag and drop images here</p>
-                  <p className="text-sm text-slate-400 mb-4">or choose several files at once (up to 12).</p>
+                  <Upload className="size-12 mx-auto text-muted mb-3" aria-hidden />
+                  <p className="text-muted-foreground font-medium mb-1">Drag and drop images here</p>
+                  <p className="text-sm text-muted mb-4">or choose several files at once (up to 12).</p>
                   <Button
                     type="button"
                     variant="outline"
-                    className="border-slate-500"
+                    className="border-border"
                     onClick={() => bulkFileInputRef.current?.click()}
                   >
                     Choose images…
@@ -1675,10 +1675,10 @@ export function ApplicationForm() {
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
                 {monthPhotos.map((monthPhoto, index) => (
                   <div key={monthPhoto.month} className="space-y-2">
-                    <Label className="text-sm text-slate-300 block truncate" title={monthPhoto.month}>
+                    <Label className="text-sm text-muted-foreground block truncate" title={monthPhoto.month}>
                       {index + 1}. {monthPhoto.month}
                     </Label>
-                    <div className="relative aspect-square rounded-lg border border-slate-600 bg-[#0f1a2e] overflow-hidden">
+                    <div className="relative aspect-square rounded-lg border border-border bg-background overflow-hidden">
                       {monthPhoto.preview ? (
                         <>
                           <img
@@ -1686,7 +1686,7 @@ export function ApplicationForm() {
                             alt={`${monthPhoto.month} preview`}
                             className="w-full h-full object-cover"
                           />
-                          <label className="absolute bottom-2 left-2 right-10 cursor-pointer rounded bg-slate-900/90 px-2 py-1 text-center text-xs text-slate-200 border border-slate-600 hover:bg-slate-800">
+                          <label className="absolute bottom-2 left-2 right-10 cursor-pointer rounded bg-background/90 px-2 py-1 text-center text-xs text-muted-foreground border border-border hover:bg-background">
                             Replace
                             <input
                               type="file"
@@ -1708,8 +1708,8 @@ export function ApplicationForm() {
                         </>
                       ) : (
                         <label className="flex flex-col items-center justify-center h-full min-h-[120px] cursor-pointer p-2">
-                          <Upload className="size-8 text-slate-500 mb-1" />
-                          <span className="text-xs text-slate-500 text-center">Add</span>
+                          <Upload className="size-8 text-muted mb-1" />
+                          <span className="text-xs text-muted text-center">Add</span>
                           <input
                             type="file"
                             accept="image/*"
@@ -1723,7 +1723,7 @@ export function ApplicationForm() {
                 ))}
               </div>
 
-              <div className="flex justify-center sm:justify-end pt-4 border-t border-slate-700/80 mt-2">
+              <div className="flex justify-center sm:justify-end pt-4 border-t border-border/80 mt-2">
                 <Button
                   type="button"
                   variant="outline"
