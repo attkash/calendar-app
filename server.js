@@ -37,6 +37,12 @@ const {
   getHolidayMapForYear,
   parseHolidayCalendarsList,
 } = require("./holidays");
+const {
+  buildPersonalDatesPayload,
+  embedPersonalDatesInPdf,
+  extractPersonalDatesFromPdf,
+  remapEventDateToYear,
+} = require("./calendarPdfEvents");
 
 const Stripe = require("stripe");
 function normalizeStripeId(raw) {
@@ -311,6 +317,11 @@ if (!fs.existsSync(UPLOADS_DIR)) {
 }
 const upload = multer({
   dest: UPLOADS_DIR,
+  limits: { fileSize: 40 * 1024 * 1024 },
+});
+
+const importPdfUpload = multer({
+  storage: multer.memoryStorage(),
   limits: { fileSize: 40 * 1024 * 1024 },
 });
 
@@ -704,6 +715,49 @@ app.post(
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+app.post(
+  "/api/calendar/import-events",
+  importPdfUpload.single("pdf"),
+  async (req, res) => {
+    if (!req.file || !req.file.buffer) {
+      return res.status(400).json({ error: "No PDF file uploaded" });
+    }
+    if (req.file.mimetype && !String(req.file.mimetype).includes("pdf")) {
+      return res.status(400).json({ error: "File must be a PDF" });
+    }
+    try {
+      const extracted = await extractPersonalDatesFromPdf(req.file.buffer);
+      if (!extracted || !extracted.events.length) {
+        return res.status(422).json({
+          error:
+            "No personal dates found in this PDF. Use a calendar PDF created and downloaded from this site (with embedded date data).",
+        });
+      }
+      const targetYear = Number.parseInt(String(req.query.year || ""), 10);
+      const events =
+        Number.isFinite(targetYear) && targetYear > 1900 && targetYear < 2100
+          ? extracted.events.map((ev) => ({
+              date: remapEventDateToYear(ev.date, targetYear),
+              occasion: ev.occasion,
+            }))
+          : extracted.events;
+
+      return res.json({
+        sourceYear: extracted.year,
+        startMonth: extracted.startMonth,
+        eventCount: events.length,
+        events,
+      });
+    } catch (err) {
+      const e = /** @type {Error} */ (err);
+      console.error("import-events PDF:", e?.message);
+      return res.status(400).json({
+        error: "Could not read personal dates from this PDF",
+      });
+    }
+  }
+);
 
 app.post("/api/auth/register", async (req, res) => {
   try {
@@ -1440,6 +1494,9 @@ async function generateCalendarPdfBuffer(body, rawFiles) {
         }
       }
     }
+    const personalPayload = buildPersonalDatesPayload(body, eventsInput);
+    await embedPersonalDatesInPdf(mergedPdf, personalPayload);
+
     const outBytes = await mergedPdf.save();
     return Buffer.from(outBytes);
   } finally {

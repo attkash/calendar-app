@@ -5,7 +5,7 @@ import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { RadioGroup, RadioGroupItem } from './ui/radio-group';
-import { Upload, X, Plus, FolderOpen, RefreshCw, LayoutDashboard, Save } from 'lucide-react';
+import { Upload, X, Plus, FolderOpen, RefreshCw, LayoutDashboard, Save, FileUp } from 'lucide-react';
 import { useAuth, authHeaders } from '../context/AuthContext';
 import { requireAuth } from '../appset';
 import type { DateNumberPosition, PdfLayoutMode, SavedCalendarFull } from '../types/calendar';
@@ -220,6 +220,7 @@ function pickFont(value: string | undefined, fallback: string) {
 export function ApplicationForm() {
   const [searchParams, setSearchParams] = useSearchParams();
   const bulkFileInputRef = useRef<HTMLInputElement>(null);
+  const importPdfInputRef = useRef<HTMLInputElement>(null);
   const checkoutErrorRef = useRef<HTMLDivElement>(null);
   /** Prevents duplicate /api/calendar/download when checkout effect re-runs (draft restore, Strict Mode). */
   const checkoutDownloadKeyRef = useRef<string | null>(null);
@@ -250,6 +251,8 @@ export function ApplicationForm() {
   } | null>(null);
   const [archiveFolder, setArchiveFolder] = useState('');
   const [loadingArchive, setLoadingArchive] = useState(false);
+  const [importingPdf, setImportingPdf] = useState(false);
+  const [importPdfMsg, setImportPdfMsg] = useState<string | null>(null);
   const [archiveReplaceAll, setArchiveReplaceAll] = useState(true);
   const [pictureSubfolders, setPictureSubfolders] = useState<string[]>([]);
   const [loadingFolders, setLoadingFolders] = useState(false);
@@ -993,6 +996,58 @@ export function ApplicationForm() {
     }
   };
 
+  const handleImportCalendarPdf = async (file: File) => {
+    setImportingPdf(true);
+    setImportPdfMsg(null);
+    setError(null);
+    try {
+      const targetYear = parseInt(year, 10) || new Date().getFullYear();
+      const res = await fetch(
+        `${API_URL}/api/calendar/import-events?year=${encodeURIComponent(String(targetYear))}`,
+        { method: 'POST', body: (() => { const fd = new FormData(); fd.append('pdf', file); return fd; })() }
+      );
+      const data = (await res.json()) as {
+        events?: { date: string; occasion: string }[];
+        error?: string;
+        sourceYear?: number | null;
+        startMonth?: number;
+        eventCount?: number;
+      };
+      if (!res.ok) {
+        throw new Error(data.error || 'Could not read dates from PDF');
+      }
+      const imported = data.events || [];
+      if (imported.length === 0) {
+        throw new Error('No personal dates found in this PDF');
+      }
+      setDateEvents(
+        imported.map((ev, i) => ({
+          id: `import-${Date.now()}-${i}`,
+          date: ev.date,
+          reason: ev.occasion,
+        }))
+      );
+      if (data.startMonth != null && data.startMonth >= 1 && data.startMonth <= 12) {
+        setStartMonth(String(data.startMonth));
+      }
+      const fromYear =
+        data.sourceYear != null ? ` from calendar year ${data.sourceYear}` : '';
+      setImportPdfMsg(
+        `Imported ${imported.length} personal date${imported.length === 1 ? '' : 's'}${fromYear}; dates are set to ${targetYear}. Check the list below before generating.`
+      );
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not import dates from PDF');
+    } finally {
+      setImportingPdf(false);
+    }
+  };
+
+  const handleImportPdfInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) void handleImportCalendarPdf(file);
+    e.target.value = '';
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -1126,6 +1181,56 @@ export function ApplicationForm() {
             your personal data.
           </p>
         </div>
+
+        <Card className="p-5 lg:p-6 mb-8 border-accent/30">
+          <CardHeader className="p-0 pb-3">
+            <CardTitle className="text-lg flex items-center gap-2">
+              <FileUp className="size-5 text-accent shrink-0" />
+              Import dates from a previous calendar PDF
+            </CardTitle>
+            <CardDescription className="text-sm leading-relaxed">
+              Upload a PDF you downloaded from this site in a past year. Personal birthdays and occasions
+              embedded in that file will fill the form below (month and day kept; year matches the
+              calendar year you choose).
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="p-0 space-y-3">
+            <input
+              ref={importPdfInputRef}
+              type="file"
+              accept="application/pdf,.pdf"
+              className="sr-only"
+              onChange={handleImportPdfInputChange}
+            />
+            <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
+              <Button
+                type="button"
+                variant="outline"
+                className="h-11"
+                disabled={importingPdf}
+                onClick={() => importPdfInputRef.current?.click()}
+              >
+                {importingPdf ? (
+                  <ButtonBusyLabel status="Reading PDF…" />
+                ) : (
+                  <>
+                    <FileUp className="size-4 mr-2 shrink-0" />
+                    Choose previous calendar PDF
+                  </>
+                )}
+              </Button>
+              <p className="text-xs text-muted leading-snug sm:flex-1">
+                New PDFs from this site store your personal dates inside the file so they can be reused
+                later.
+              </p>
+            </div>
+            {importPdfMsg && (
+              <p className="text-sm text-success leading-relaxed" role="status">
+                {importPdfMsg}
+              </p>
+            )}
+          </CardContent>
+        </Card>
 
         <form onSubmit={handleSubmit} className="space-y-8">
           {error && (
