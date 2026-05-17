@@ -1,22 +1,48 @@
 @import "tailwindcss";
 
 @theme {
-  --color-background: #0f172a;
-  --color-surface: #1e293b;
-  --color-accent: #8b5cf6;
-  --color-accent-hover: #7c3aed;
-  --color-success: #10b981;
-  --color-foreground: #f8fafc;
-  --color-muted: #94a3b8;
-  --color-muted-foreground: #cbd5e1;
-  --color-border: #334155;
+  --color-background: #f8fafc;
+  --color-surface: #f1f5f9;
+  --color-input: #ffffff;
+  --color-accent: #2563eb;
+  --color-accent-hover: #1d4ed8;
+  --color-success: #059669;
+  --color-success-hover: #047857;
+  --color-foreground: #111827;
+  --color-muted: #6b7280;
+  --color-muted-foreground: #374151;
+  --color-border: #e2e8f0;
+  --color-on-accent: #ffffff;
+  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial,
+    sans-serif;
+  --default-font-family: var(--font-sans);
+  --shadow-card: 0 1px 2px 0 rgb(15 23 42 / 0.05), 0 10px 28px -6px rgb(15 23 42 / 0.16),
+    0 20px 48px -12px rgb(15 23 42 / 0.12);
+  --shadow-card-lg: 0 2px 4px 0 rgb(15 23 42 / 0.06), 0 16px 40px -8px rgb(15 23 42 / 0.2),
+    0 28px 56px -16px rgb(15 23 42 / 0.14);
 }
 
 @layer base {
+  *,
+  *::before,
+  *::after {
+    font-family: inherit;
+  }
+
   body {
     margin: 0;
     min-height: 100vh;
     background-color: var(--color-background);
     color: var(--color-foreground);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  button,
+  input,
+  select,
+  textarea {
+    font-family: inherit;
   }
 }

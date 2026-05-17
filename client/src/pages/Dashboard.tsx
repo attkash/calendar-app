@@ -131,7 +131,7 @@ export function Dashboard() {
                 {list.map((c) => (
                   <li
                     key={c.id}
-                    className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-lg border border-border bg-surface/50"
+                    className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-lg border border-border bg-input shadow-sm"
                   >
                     <div>
                       <p className="font-medium text-foreground">{c.name}</p>
