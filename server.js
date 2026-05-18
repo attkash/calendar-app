@@ -299,7 +299,7 @@ function publicCalendar(c) {
     archiveFolder: c.archiveFolder,
     archiveReplaceAll: c.archiveReplaceAll,
     layoutMode: c.layoutMode || "landscape-spread",
-    events: c.events,
+    events: [],
     updatedAt: c.updatedAt,
     createdAt: c.createdAt,
   };
@@ -740,6 +740,7 @@ app.post(
           ? extracted.events.map((ev) => ({
               date: remapEventDateToYear(ev.date, targetYear),
               occasion: ev.occasion,
+              ...(ev.showYears ? { showYears: true } : {}),
             }))
           : extracted.events;
 
@@ -996,22 +997,30 @@ function holidayIconHtml(source) {
 }
 
 /**
- * @param {Array<{ date: string, occasion: string }>} userDayEvents
+ * @param {Array<{ date: string, occasion: string, showYears?: boolean }>} userDayEvents
  * @param {string} monthDayKey MM-DD
  * @param {Map<string, { name: string, isHoliday: boolean, source?: string }[]>} holidayMap
+ * @param {number} pageYear calendar year for this month page
  */
-function buildEventHtmlForCell(userDayEvents, monthDayKey, holidayMap) {
+function buildEventHtmlForCell(userDayEvents, monthDayKey, holidayMap, pageYear) {
   const lines = [];
   if (userDayEvents && userDayEvents.length) {
     userDayEvents.forEach((e) => {
       const y = String(e.date).split("-")[0];
+      const birthYear = Number.parseInt(y, 10);
       const parts = String(e.occasion || "")
         .split(/\s*;\s*/)
         .map((s) => s.trim())
         .filter(Boolean);
       parts.forEach((chunk) => {
-        const line = y ? `${chunk} (${y})` : chunk;
-        lines.push({ text: line, isHoliday: false, source: null });
+        let suffix = "";
+        if (e.showYears && Number.isFinite(pageYear) && Number.isFinite(birthYear)) {
+          const years = pageYear - birthYear;
+          if (years >= 0) suffix = ` (${years})`;
+        } else if (y) {
+          suffix = ` (${y})`;
+        }
+        lines.push({ text: `${chunk}${suffix}`, isHoliday: false, source: null });
       });
     });
   }
@@ -1291,7 +1300,12 @@ function buildCalendarMonthsHtmlFragment(
             day
           ).padStart(2, "0")}`;
           const userEvs = eventsByMonthDay[monthDayKey] || [];
-          eventHtml = buildEventHtmlForCell(userEvs, monthDayKey, holidayMap);
+          eventHtml = buildEventHtmlForCell(
+            userEvs,
+            monthDayKey,
+            holidayMap,
+            pageYear
+          );
         }
         grid += `
           <div class="${cellCls}" style="font-family: ${datesFont}, sans-serif">
@@ -1392,7 +1406,11 @@ async function generateCalendarPdfBuffer(body, rawFiles) {
         if (m && d) {
           const key = `${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
           if (!eventsByMonthDay[key]) eventsByMonthDay[key] = [];
-          eventsByMonthDay[key].push({ date: ev.date, occasion: ev.occasion });
+          eventsByMonthDay[key].push({
+            date: ev.date,
+            occasion: ev.occasion,
+            showYears: Boolean(ev.showYears),
+          });
         }
       }
     });

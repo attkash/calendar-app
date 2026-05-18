@@ -20,6 +20,8 @@ interface DateEvent {
   id: string;
   date: string;
   reason: string;
+  /** When true, PDF shows age / years since this date for that calendar year. */
+  showYears: boolean;
 }
 
 const MONTHS = [
@@ -231,7 +233,7 @@ export function ApplicationForm() {
     MONTHS.map(month => ({ month, file: null, preview: null }))
   );
   const [dateEvents, setDateEvents] = useState<DateEvent[]>([
-    { id: '1', date: '', reason: '' }
+    { id: '1', date: '', reason: '', showYears: false }
   ]);
   const [weekStart, setWeekStart] = useState<'monday' | 'sunday'>('sunday');
   const [yearFont, setYearFont] = useState('Arial');
@@ -425,18 +427,7 @@ export function ApplicationForm() {
     setArchiveReplaceAll(Boolean(cal.archiveReplaceAll));
     setLayoutMode(cal.layoutMode === 'portrait-single' ? 'portrait-single' : 'landscape-spread');
     setSaveName((cal.name && String(cal.name).trim()) || 'My calendar');
-    const rawEvents = Array.isArray(cal.events) ? cal.events : [];
-    const evs =
-      rawEvents.length > 0
-        ? rawEvents
-            .filter((e) => e && (String(e.date || '').trim() || String(e.occasion || '').trim()))
-            .map((e, i) => ({
-              id: `loaded-${i}-${e.date}`,
-              date: String(e.date || '').trim(),
-              reason: String(e.occasion || '').trim(),
-            }))
-        : [{ id: '1', date: '', reason: '' }];
-    setDateEvents(evs.length > 0 ? evs : [{ id: '1', date: '', reason: '' }]);
+    /* Personal dates are not loaded from the server — only from PDF import or local draft. */
   }, []);
 
   useEffect(() => {
@@ -548,7 +539,7 @@ export function ApplicationForm() {
         archiveReplaceAll?: boolean;
         layoutMode?: PdfLayoutMode;
         saveName?: string;
-        events?: { id: string; date: string; reason: string }[];
+        events?: { id: string; date: string; reason: string; showYears?: boolean }[];
       };
       if (d.v !== DRAFT_VERSION) return;
       if (d.forUser) {
@@ -586,6 +577,7 @@ export function ApplicationForm() {
             id: e.id || `draft-${i}`,
             date: String(e.date ?? ''),
             reason: String(e.reason ?? ''),
+            showYears: Boolean(e.showYears),
           }))
         );
       }
@@ -616,7 +608,12 @@ export function ApplicationForm() {
           archiveReplaceAll,
           layoutMode,
           saveName,
-          events: dateEvents.map(({ id, date, reason }) => ({ id, date, reason })),
+          events: dateEvents.map(({ id, date, reason, showYears }) => ({
+            id,
+            date,
+            reason,
+            showYears,
+          })),
         };
         localStorage.setItem(LS_NEW_CALENDAR_DRAFT, JSON.stringify(payload));
       } catch {
@@ -763,7 +760,7 @@ export function ApplicationForm() {
   const addEvent = () => {
     setDateEvents(prev => [
       ...prev,
-      { id: Date.now().toString(), date: '', reason: '' }
+      { id: Date.now().toString(), date: '', reason: '', showYears: false }
     ]);
   };
 
@@ -778,6 +775,12 @@ export function ApplicationForm() {
       prev.map(event =>
         event.id === id ? { ...event, [field]: value } : event
       )
+    );
+  };
+
+  const updateEventShowYears = (id: string, showYears: boolean) => {
+    setDateEvents(prev =>
+      prev.map(event => (event.id === id ? { ...event, showYears } : event))
     );
   };
 
@@ -806,9 +809,7 @@ export function ApplicationForm() {
         archiveFolder,
         archiveReplaceAll,
         layoutMode,
-        events: dateEvents
-          .filter((e) => e.date && e.reason)
-          .map((e) => ({ date: e.date, occasion: e.reason })),
+        events: [],
       };
       const id = editingPresetId;
       const url = id
@@ -860,7 +861,11 @@ export function ApplicationForm() {
     formData.append('events', JSON.stringify(
       dateEvents
         .filter(e => e.date && e.reason)
-        .map(e => ({ date: e.date, occasion: e.reason }))
+        .map(e => ({
+          date: e.date,
+          occasion: e.reason,
+          showYears: Boolean(e.showYears),
+        }))
     ));
     formData.append('weekStart', weekStart);
     formData.append('yearFont', yearFont);
@@ -1007,7 +1012,7 @@ export function ApplicationForm() {
         { method: 'POST', body: (() => { const fd = new FormData(); fd.append('pdf', file); return fd; })() }
       );
       const data = (await res.json()) as {
-        events?: { date: string; occasion: string }[];
+        events?: { date: string; occasion: string; showYears?: boolean }[];
         error?: string;
         sourceYear?: number | null;
         startMonth?: number;
@@ -1025,6 +1030,7 @@ export function ApplicationForm() {
           id: `import-${Date.now()}-${i}`,
           date: ev.date,
           reason: ev.occasion,
+          showYears: Boolean(ev.showYears),
         }))
       );
       if (data.startMonth != null && data.startMonth >= 1 && data.startMonth <= 12) {
@@ -1896,8 +1902,10 @@ export function ApplicationForm() {
           <Card className="p-6 lg:p-8">
             <CardHeader className="p-0 pb-4">
               <CardTitle className="text-xl">Add dates and occasions</CardTitle>
-              <CardDescription className="text-base">
-                Attention: please mark the proper year.
+              <CardDescription className="text-base leading-relaxed">
+                Enter the full date (birth or start year). Optional <strong className="text-foreground">Years</strong>{' '}
+                checkbox: show age in the PDF (e.g. birthday 1969-11-24 → <strong className="text-foreground">Amy (57)</strong>{' '}
+                in November 2026). Personal dates are stored only inside the PDF you download — not on the server account.
               </CardDescription>
             </CardHeader>
             <CardContent className="p-0 space-y-4">
@@ -1908,12 +1916,33 @@ export function ApplicationForm() {
                       <Label htmlFor={`date-${event.id}`}>
                         Date {index > 0 && `#${index + 1}`}
                       </Label>
-                      <Input
-                        id={`date-${event.id}`}
-                        type="date"
-                        value={event.date}
-                        onChange={(e) => updateEvent(event.id, 'date', e.target.value)}
-                      />
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+                        <Input
+                          id={`date-${event.id}`}
+                          type="date"
+                          value={event.date}
+                          onChange={(e) => updateEvent(event.id, 'date', e.target.value)}
+                          className="sm:flex-1"
+                        />
+                        <label
+                          htmlFor={`years-${event.id}`}
+                          className="flex cursor-pointer items-center gap-2 shrink-0 rounded-lg border border-border bg-input px-3 py-2.5 shadow-sm"
+                          title="Show years since this date in the PDF (e.g. age on a birthday)"
+                        >
+                          <input
+                            id={`years-${event.id}`}
+                            type="checkbox"
+                            checked={event.showYears}
+                            onChange={(e) =>
+                              updateEventShowYears(event.id, e.target.checked)
+                            }
+                            className="size-4 shrink-0 rounded border-border text-accent focus:ring-2 focus:ring-accent/40"
+                          />
+                          <span className="text-sm text-muted-foreground whitespace-nowrap">
+                            Years
+                          </span>
+                        </label>
+                      </div>
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor={`reason-${event.id}`}>

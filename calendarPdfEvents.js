@@ -23,6 +23,7 @@ function buildPersonalDatesPayload(body, eventsInput) {
       .map((ev) => ({
         date: String(ev.date).trim(),
         occasion: String(ev.occasion).trim(),
+        ...(ev.showYears ? { showYears: true } : {}),
       })),
   };
 }
@@ -110,6 +111,7 @@ async function extractPersonalDatesFromPdf(pdfBuffer) {
     .map((ev) => ({
       date: String(ev.date).trim(),
       occasion: String(ev.occasion).trim(),
+      ...(ev.showYears ? { showYears: true } : {}),
     }));
 
   if (events.length === 0) return null;

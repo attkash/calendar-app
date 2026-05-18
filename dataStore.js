@@ -118,7 +118,8 @@ function upsertSavedCalendar(userId, payload) {
       payload.layoutMode === "portrait-single"
         ? "portrait-single"
         : "landscape-spread",
-    events: normalizeEvents(payload.events),
+    /** Personal dates live only inside generated PDFs — never on user accounts. */
+    events: [],
     updatedAt: now,
     createdAt:
       existingIdx >= 0 ? data.savedCalendars[existingIdx].createdAt : now,

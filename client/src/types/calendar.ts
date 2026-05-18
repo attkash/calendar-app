@@ -1,6 +1,8 @@
+/** Always empty from the server — personal dates are stored only inside generated PDFs. */
 export interface SavedCalendarEvent {
   date: string;
   occasion: string;
+  showYears?: boolean;
 }
 
 /** One A4 portrait page per month vs photo + grid on two A4 landscape pages */
