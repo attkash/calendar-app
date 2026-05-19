@@ -54,21 +54,21 @@ const DATE_POSITION_OPTIONS: { value: DateNumberPosition; label: string }[] = [
 ];
 
 const HOLIDAY_CALENDAR_OPTION_IDS = [
+  'usa',
   'catholic-protestant',
   'orthodox',
   'muslim',
   'jewish',
   'buddhist',
-  'usa',
 ] as const;
 
 const HOLIDAY_CALENDAR_OPTIONS: { id: (typeof HOLIDAY_CALENDAR_OPTION_IDS)[number]; label: string }[] = [
+  { id: 'usa', label: 'U.S. federal & civic holidays' },
   { id: 'catholic-protestant', label: 'Catholic & Protestant (Western)' },
   { id: 'orthodox', label: 'Orthodox Christian' },
   { id: 'muslim', label: 'Muslim' },
   { id: 'jewish', label: 'Jewish' },
   { id: 'buddhist', label: 'Buddhist' },
-  { id: 'usa', label: 'U.S. federal & civic holidays' },
 ];
 
 const FONT_OPTIONS = [
@@ -1255,21 +1255,6 @@ export function ApplicationForm() {
             </div>
           )}
 
-          {/* Submit Button (top duplicate) */}
-          <div className="flex justify-end">
-            <Button
-              type="submit"
-              className={`min-w-[200px] text-lg ${isSubmitting ? 'min-h-14 h-auto py-2' : 'h-12'}`}
-              disabled={isSubmitting || isGeneratingFree}
-            >
-              {isSubmitting ? (
-                <ButtonBusyLabel status="Redirecting…" />
-              ) : (
-                'Pay & download PDF'
-              )}
-            </Button>
-          </div>
-
           {requireAuth ? (
             <Card className="p-4 lg:p-5">
               <CardHeader className="p-0 pb-3">
@@ -1417,6 +1402,26 @@ export function ApplicationForm() {
                   </select>
                 </div>
               </div>
+              <div className="border-t border-border/80 pt-6 mt-2">
+                <Label className="text-base font-medium">Week starts with</Label>
+                <p className="text-sm text-muted mb-3">
+                  Choose Monday or Sunday as the first day of the week
+                </p>
+                <RadioGroup
+                  value={weekStart}
+                  onValueChange={(value) => setWeekStart(value as 'monday' | 'sunday')}
+                  className="flex gap-6"
+                >
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <RadioGroupItem value="sunday" id="week-start-sunday" className="h-5 w-5" />
+                    <span className="text-base">Sunday</span>
+                  </label>
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <RadioGroupItem value="monday" id="week-start-monday" className="h-5 w-5" />
+                    <span className="text-base">Monday</span>
+                  </label>
+                </RadioGroup>
+              </div>
             </CardContent>
           </Card>
 
@@ -1455,31 +1460,16 @@ export function ApplicationForm() {
             </CardContent>
           </Card>
 
-          {/* Week Start + Font Settings - combined */}
           <Card className="p-6 lg:p-8">
             <CardHeader className="p-0 pb-6">
-              <CardTitle className="text-xl">Week & Font Settings</CardTitle>
-              <CardDescription className="text-base">Choose how your week starts and fonts for calendar elements</CardDescription>
+              <CardTitle className="text-xl">Font settings</CardTitle>
+              <CardDescription className="text-base">
+                Fonts for calendar elements in the PDF
+              </CardDescription>
             </CardHeader>
             <CardContent className="p-0">
               <div className="grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(12.5rem,15.5rem)] lg:gap-10 lg:items-start">
-                <div className="min-w-0 space-y-8">
-                  <div>
-                    <Label className="text-base font-medium">Week starts with</Label>
-                    <p className="text-sm text-muted mb-3">Choose Monday or Sunday as the first day of the week</p>
-                    <RadioGroup value={weekStart} onValueChange={(value) => setWeekStart(value as 'monday' | 'sunday')} className="flex gap-6">
-                      <label className="flex items-center gap-3 cursor-pointer">
-                        <RadioGroupItem value="sunday" id="sunday" className="h-5 w-5" />
-                        <span className="text-base">Sunday</span>
-                      </label>
-                      <label className="flex items-center gap-3 cursor-pointer">
-                        <RadioGroupItem value="monday" id="monday" className="h-5 w-5" />
-                        <span className="text-base">Monday</span>
-                      </label>
-                    </RadioGroup>
-                  </div>
-
-                  <div className="border-t border-border/80 pt-8">
+                <div className="min-w-0">
                     <Label className="text-base font-medium">Choose fonts</Label>
                 <p className="text-sm text-muted mb-4">Font for year, month names, week days, and dates; date digits can be scaled separately for the PDF.</p>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -1589,7 +1579,6 @@ export function ApplicationForm() {
                     </RadioGroup>
                   </div>
                 </div>
-                  </div>
                 </div>
 
                 <aside className="w-full max-w-[15.5rem] mx-auto lg:mx-0 lg:max-w-none shrink-0 lg:sticky lg:top-24">
