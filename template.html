@@ -417,6 +417,16 @@
       line-height: 1.2;
     }
 
+    /* Personal dates from "Add dates and occasions" */
+    body.pdf-layout-landscape-spread .page--month-calendar .cell.cell--personal:not(.cell-header),
+    body.pdf-layout-portrait-single .page--month-combined .cell.cell--personal:not(.cell-header) {
+      background: #fce7f3 !important;
+    }
+    body.pdf-layout-landscape-spread .page--month-calendar .cell.cell--personal.cell--weekend:not(.cell-header),
+    body.pdf-layout-portrait-single .page--month-combined .cell.cell--personal.cell--weekend:not(.cell-header) {
+      background: #fce7f3 !important;
+    }
+
     /* Weekend columns: Sat & Sun (column order follows week start in HTML) */
     body.pdf-layout-landscape-spread .cell-header--weekend,
     body.pdf-layout-portrait-single .cell-header--weekend {

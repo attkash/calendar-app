@@ -734,18 +734,22 @@ app.post(
             "No personal dates found in this PDF. Use a calendar PDF created and downloaded from this site (with embedded date data).",
         });
       }
-      const targetYear = Number.parseInt(String(req.query.year || ""), 10);
-      const events =
-        Number.isFinite(targetYear) && targetYear > 1900 && targetYear < 2100
-          ? extracted.events.map((ev) => ({
-              date: remapEventDateToYear(ev.date, targetYear),
-              occasion: ev.occasion,
-              ...(ev.showYears ? { showYears: true } : {}),
-            }))
-          : extracted.events;
+      const pdfYear =
+        extracted.year != null ? Number(extracted.year) : NaN;
+      const calendarYear =
+        Number.isFinite(pdfYear) && pdfYear > 1900 && pdfYear < 2100
+          ? pdfYear
+          : new Date().getFullYear();
+      // Keep original YYYY-MM-DD (birth / event year). Grid uses month-day only;
+      // remapping the year breaks showYears age (pageYear − birthYear) and (year) labels.
+      const events = extracted.events.map((ev) => ({
+        date: ev.date,
+        occasion: ev.occasion,
+        ...(ev.showYears ? { showYears: true } : {}),
+      }));
 
       return res.json({
-        sourceYear: extracted.year,
+        sourceYear: calendarYear,
         startMonth: extracted.startMonth,
         eventCount: events.length,
         events,
@@ -1293,13 +1297,14 @@ function buildCalendarMonthsHtmlFragment(
         const idx = w * 7 + c;
         const day = days[idx] ?? "";
         const wk = isWeekendColumn(c, weekStart);
-        const cellCls = `${wk ? "cell cell--weekend" : "cell"} ${datePosClass}`;
         let eventHtml = "";
+        let hasPersonalEvent = false;
         if (day !== "") {
           const monthDayKey = `${String(monthIndex + 1).padStart(2, "0")}-${String(
             day
           ).padStart(2, "0")}`;
           const userEvs = eventsByMonthDay[monthDayKey] || [];
+          hasPersonalEvent = userEvs.length > 0;
           eventHtml = buildEventHtmlForCell(
             userEvs,
             monthDayKey,
@@ -1307,6 +1312,8 @@ function buildCalendarMonthsHtmlFragment(
             pageYear
           );
         }
+        const personalCls = hasPersonalEvent ? " cell--personal" : "";
+        const cellCls = `${wk ? "cell cell--weekend" : "cell"}${personalCls} ${datePosClass}`;
         grid += `
           <div class="${cellCls}" style="font-family: ${datesFont}, sans-serif">
             <div class="cell-day-top">

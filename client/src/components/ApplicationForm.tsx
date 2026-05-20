@@ -9,6 +9,10 @@ import { Upload, X, Plus, FolderOpen, RefreshCw, LayoutDashboard, Save, FileUp }
 import { useAuth, authHeaders } from '../context/AuthContext';
 import { requireAuth } from '../appset';
 import type { DateNumberPosition, PdfLayoutMode, SavedCalendarFull } from '../types/calendar';
+import { CalendarWizard } from './CalendarWizard';
+import { ButtonBusyLabel } from './ButtonBusyLabel';
+
+const WIZARD_STEP_COUNT = 5;
 
 interface MonthPhoto {
   month: string;
@@ -93,17 +97,6 @@ const API_URL =
   (import.meta.env.DEV ? 'http://localhost:3000' : '');
 const STRIPE_PRICE_LOOKUP_KEY =
   (import.meta.env.VITE_STRIPE_PRICE_LOOKUP_KEY as string | undefined)?.trim() || '';
-
-const PATIENCE_HINT = 'please be patient, could take a minute';
-
-function ButtonBusyLabel({ status }: { status: string }) {
-  return (
-    <span className="flex flex-col items-center gap-0.5 leading-tight text-center">
-      <span>{status}</span>
-      <span className="text-[0.68rem] font-normal opacity-90 leading-snug">{PATIENCE_HINT}</span>
-    </span>
-  );
-}
 
 /** Long edge cap (px) before sending month images for free PDF — keeps Puppeteer under hosting timeouts (e.g. Render / Cloudflare). */
 const FREE_PDF_MAX_IMAGE_EDGE = (() => {
@@ -244,6 +237,7 @@ export function ApplicationForm() {
   const [dateNumberPosition, setDateNumberPosition] = useState<DateNumberPosition>('top-left');
   const [holidayCalendars, setHolidayCalendars] = useState<string[]>([]);
   const [layoutMode, setLayoutMode] = useState<PdfLayoutMode>('landscape-spread');
+  const [wizardStep, setWizardStep] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isGeneratingFree, setIsGeneratingFree] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -1006,11 +1000,14 @@ export function ApplicationForm() {
     setImportPdfMsg(null);
     setError(null);
     try {
-      const targetYear = parseInt(year, 10) || new Date().getFullYear();
-      const res = await fetch(
-        `${API_URL}/api/calendar/import-events?year=${encodeURIComponent(String(targetYear))}`,
-        { method: 'POST', body: (() => { const fd = new FormData(); fd.append('pdf', file); return fd; })() }
-      );
+      const res = await fetch(`${API_URL}/api/calendar/import-events`, {
+        method: 'POST',
+        body: (() => {
+          const fd = new FormData();
+          fd.append('pdf', file);
+          return fd;
+        })(),
+      });
       const data = (await res.json()) as {
         events?: { date: string; occasion: string; showYears?: boolean }[];
         error?: string;
@@ -1036,10 +1033,21 @@ export function ApplicationForm() {
       if (data.startMonth != null && data.startMonth >= 1 && data.startMonth <= 12) {
         setStartMonth(String(data.startMonth));
       }
-      const fromYear =
-        data.sourceYear != null ? ` from calendar year ${data.sourceYear}` : '';
+      if (
+        data.sourceYear != null &&
+        data.sourceYear >= 2000 &&
+        data.sourceYear <= 2100
+      ) {
+        setYear(String(data.sourceYear));
+      }
+      const restoredYear =
+        data.sourceYear != null &&
+        data.sourceYear >= 2000 &&
+        data.sourceYear <= 2100
+          ? data.sourceYear
+          : parseInt(year, 10) || new Date().getFullYear();
       setImportPdfMsg(
-        `Imported ${imported.length} personal date${imported.length === 1 ? '' : 's'}${fromYear}; dates are set to ${targetYear}. Check the list below before generating.`
+        `Imported ${imported.length} personal date${imported.length === 1 ? '' : 's'} for calendar year ${restoredYear}. Check the list on step 4 before generating.`
       );
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not import dates from PDF');
@@ -1088,6 +1096,18 @@ export function ApplicationForm() {
     }
   };
 
+  const goToWizardStep = (step: number) => {
+    setWizardStep(Math.min(WIZARD_STEP_COUNT, Math.max(1, step)));
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const photoCount = monthPhotos.filter((p) => p.file).length;
+  const eventCount = dateEvents.filter((e) => e.date && e.reason).length;
+  const layoutLabel =
+    layoutMode === 'portrait-single' ? 'Portrait — one page' : 'Landscape — two pages';
+  const startMonthName =
+    MONTHS[Math.min(11, Math.max(0, (parseInt(startMonth, 10) || 1) - 1))];
+
   return (
     <div className="min-h-screen bg-background text-foreground py-12 px-6 sm:px-10 lg:px-16">
       {paymentSuccessModal != null && (
@@ -1131,7 +1151,7 @@ export function ApplicationForm() {
           </Card>
         </div>
       )}
-      <div className="max-w-[1200px] mx-auto">
+      <div className="max-w-4xl mx-auto">
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-8">
           <div className="flex items-center gap-3 order-2 sm:order-1">
             {requireAuth ? (
@@ -1139,18 +1159,6 @@ export function ApplicationForm() {
                 ← Home
               </Link>
             ) : null}
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={handleFreeGenerate}
-              disabled={isGeneratingFree || isSubmitting}
-              title="Generate PDF for free (without Stripe)"
-              className="border-yellow-500/60 text-yellow-200 hover:bg-yellow-900/20"
-            >
-              <X className="size-4 mr-1.5" />
-              {isGeneratingFree ? 'Generating free PDF…' : 'Free PDF'}
-            </Button>
           </div>
           {requireAuth ? (
             <div className="flex flex-wrap gap-2 justify-end order-1 sm:order-2">
@@ -1188,56 +1196,6 @@ export function ApplicationForm() {
           </p>
         </div>
 
-        <Card className="p-5 lg:p-6 mb-8 border-accent/30">
-          <CardHeader className="p-0 pb-3">
-            <CardTitle className="text-lg flex items-center gap-2">
-              <FileUp className="size-5 text-accent shrink-0" />
-              Import dates from a previous calendar PDF
-            </CardTitle>
-            <CardDescription className="text-sm leading-relaxed">
-              Upload a PDF you downloaded from this site in a past year. Personal birthdays and occasions
-              embedded in that file will fill the form below (month and day kept; year matches the
-              calendar year you choose).
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="p-0 space-y-3">
-            <input
-              ref={importPdfInputRef}
-              type="file"
-              accept="application/pdf,.pdf"
-              className="sr-only"
-              onChange={handleImportPdfInputChange}
-            />
-            <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
-              <Button
-                type="button"
-                variant="outline"
-                className="h-11"
-                disabled={importingPdf}
-                onClick={() => importPdfInputRef.current?.click()}
-              >
-                {importingPdf ? (
-                  <ButtonBusyLabel status="Reading PDF…" />
-                ) : (
-                  <>
-                    <FileUp className="size-4 mr-2 shrink-0" />
-                    Choose previous calendar PDF
-                  </>
-                )}
-              </Button>
-              <p className="text-xs text-muted leading-snug sm:flex-1">
-                New PDFs from this site store your personal dates inside the file so they can be reused
-                later.
-              </p>
-            </div>
-            {importPdfMsg && (
-              <p className="text-sm text-success leading-relaxed" role="status">
-                {importPdfMsg}
-              </p>
-            )}
-          </CardContent>
-        </Card>
-
         <form onSubmit={handleSubmit} className="space-y-8">
           {error && (
             <div
@@ -1255,55 +1213,46 @@ export function ApplicationForm() {
             </div>
           )}
 
-          {requireAuth ? (
-            <Card className="p-4 lg:p-5">
-              <CardHeader className="p-0 pb-3">
-                <CardTitle className="text-lg">Save to your account</CardTitle>
-              <CardDescription className="text-sm leading-relaxed">
-                {user
-                  ? 'Saves dates and design (fonts, layout, week start, Pictures folder path) — not month photos. Add or load photos again before generating a PDF.'
-                  : 'Sign in or register to keep a template between years and open it from your account.'}
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="p-0">
-              {saveInfo && (
-                <div className="mb-3 text-sm text-success">{saveInfo}</div>
-              )}
-              {saveErr && (
-                <div className="mb-3 text-sm text-red-300">{saveErr}</div>
-              )}
-              <div className="flex flex-col lg:flex-row gap-3 lg:items-end">
-                <div className="flex-1 space-y-2 min-w-0">
-                  <Label htmlFor="save-name" className="text-sm">
-                    Name
-                  </Label>
-                  <Input
-                    id="save-name"
-                    value={saveName}
-                    onChange={(e) => setSaveName(e.target.value)}
-                    placeholder="e.g. Family calendar"
-                    className="h-10"
-                    disabled={!!presetLoading}
-                  />
-                </div>
-                <Button
-                  type="button"
-                  onClick={handleSaveToAccount}
-                  disabled={savingPreset || !!presetLoading}
-                  className="h-10 shrink-0 px-3 text-sm"
-                >
-                  <Save className="size-3.5 mr-1.5" />
-                  {savingPreset
-                    ? 'Saving…'
-                    : editingPresetId
-                      ? 'Update in account'
-                      : 'Save to account'}
-                </Button>
-              </div>
-              </CardContent>
-            </Card>
-          ) : null}
 
+          <CalendarWizard
+            step={wizardStep}
+            totalSteps={WIZARD_STEP_COUNT}
+            onStepClick={goToWizardStep}
+            onBack={() => goToWizardStep(wizardStep - 1)}
+            onNext={() => goToWizardStep(wizardStep + 1)}
+            isSubmitting={isSubmitting}
+            isGeneratingFree={isGeneratingFree}
+            onFreePdf={() => void handleFreeGenerate()}
+          >
+            {wizardStep === 1 && (
+              <div className="space-y-6">
+                <div className="text-center space-y-3 py-2 sm:py-4">
+                  <h2 className="text-2xl sm:text-3xl font-semibold">Getting started</h2>
+                  <p className="text-muted-foreground leading-relaxed max-w-lg mx-auto">
+                    <strong className="text-foreground">First time here?</strong> Click <strong className="text-foreground">Next</strong> to continue.
+                  </p>
+                  <p className="text-muted text-sm leading-relaxed max-w-lg mx-auto">
+                    <strong className="text-foreground">Returning user?</strong> Upload your previous calendar PDF to restore personal dates.
+                  </p>
+                </div>
+                <Card className="border-accent/30 bg-surface/40">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-lg flex items-center gap-2"><FileUp className="size-5 text-accent shrink-0" />Import previous PDF</CardTitle>
+                    <CardDescription className="text-sm">Dates are stored inside the PDF only.</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <input ref={importPdfInputRef} type="file" accept="application/pdf,.pdf" className="sr-only" onChange={handleImportPdfInputChange} />
+                    <Button type="button" variant="outline" className="h-11" disabled={importingPdf} onClick={() => importPdfInputRef.current?.click()}>
+                      {importingPdf ? <ButtonBusyLabel status="Reading PDF…" /> : <><FileUp className="size-4 mr-2" />Choose PDF</>}
+                    </Button>
+                    {importPdfMsg && <p className="text-sm text-success" role="status">{importPdfMsg}</p>}
+                  </CardContent>
+                </Card>
+              </div>
+            )}
+
+            {wizardStep === 2 && (
+            <>
           <Card className="p-6 lg:p-8">
             <CardHeader className="p-0 pb-4">
               <CardTitle className="text-xl">PDF layout</CardTitle>
@@ -1421,41 +1370,6 @@ export function ApplicationForm() {
                     <span className="text-base">Monday</span>
                   </label>
                 </RadioGroup>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="p-6 lg:p-8">
-            <CardHeader className="p-0 pb-4">
-              <CardTitle className="text-xl">Holidays &amp; celebrations</CardTitle>
-              <CardDescription className="text-base">
-                Optional sets of public and religious dates. In the PDF they are listed in <strong>red</strong> at the bottom of
-                the day cell, with your own dates. Islamic and Jewish dates are approximate; extend years in
-                <code className="mx-1 text-sm bg-surface border border-border px-1 py-0.5 rounded">holidays.js</code> on the server if needed.
-              </CardDescription>
-              <p
-                className="mt-3 rounded-lg border border-orange-200 bg-warning-bg px-3 py-2.5 text-sm font-semibold leading-snug text-warning"
-                role="note"
-              >
-                ATTENTION! Religious days rules are only as accurate as the precomputed range.
-              </p>
-            </CardHeader>
-            <CardContent className="p-0">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {HOLIDAY_CALENDAR_OPTIONS.map((opt) => (
-                  <label
-                    key={opt.id}
-                    className="flex cursor-pointer items-start gap-3 rounded-lg border border-border bg-input p-3 shadow-sm text-left hover:border-accent/40 hover:bg-accent/5"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={holidayCalendars.includes(opt.id)}
-                      onChange={() => toggleHolidayCalendar(opt.id)}
-                      className="mt-0.5 size-4 shrink-0 rounded border-border bg-input text-accent shadow-sm focus:ring-2 focus:ring-accent/40"
-                    />
-                    <span className="text-sm text-muted-foreground leading-snug">{opt.label}</span>
-                  </label>
-                ))}
               </div>
             </CardContent>
           </Card>
@@ -1667,7 +1581,11 @@ export function ApplicationForm() {
               </div>
             </CardContent>
           </Card>
+            </>
+            )}
 
+            {wizardStep === 3 && (
+            <>
           {/* Months Section */}
           <Card className="p-6 lg:p-8">
             <CardHeader className="p-0 pb-4">
@@ -1869,20 +1787,44 @@ export function ApplicationForm() {
                   </div>
                 ))}
               </div>
+</CardContent>
+          </Card>
+            </>
+            )}
 
-              <div className="flex justify-center sm:justify-end pt-4 border-t border-border/80 mt-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={handleFreeGenerate}
-                  disabled={isGeneratingFree || isSubmitting}
-                  title="Generate PDF for free (without Stripe)"
-                  className="border-yellow-500/60 text-yellow-200 hover:bg-yellow-900/20"
-                >
-                  <X className="size-4 mr-1.5" />
-                  {isGeneratingFree ? 'Generating free PDF…' : 'Free PDF'}
-                </Button>
+            {wizardStep === 4 && (
+            <>
+          <Card className="p-6 lg:p-8">
+            <CardHeader className="p-0 pb-4">
+              <CardTitle className="text-xl">Holidays &amp; celebrations</CardTitle>
+              <CardDescription className="text-base">
+                Optional sets of public and religious dates. In the PDF they are listed in <strong>red</strong> at the bottom of
+                the day cell, with your own dates. Islamic and Jewish dates are approximate; extend years in
+                <code className="mx-1 text-sm bg-surface border border-border px-1 py-0.5 rounded">holidays.js</code> on the server if needed.
+              </CardDescription>
+              <p
+                className="mt-3 rounded-lg border border-orange-200 bg-warning-bg px-3 py-2.5 text-sm font-semibold leading-snug text-warning"
+                role="note"
+              >
+                ATTENTION! Religious days rules are only as accurate as the precomputed range.
+              </p>
+            </CardHeader>
+            <CardContent className="p-0">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {HOLIDAY_CALENDAR_OPTIONS.map((opt) => (
+                  <label
+                    key={opt.id}
+                    className="flex cursor-pointer items-start gap-3 rounded-lg border border-border bg-input p-3 shadow-sm text-left hover:border-accent/40 hover:bg-accent/5"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={holidayCalendars.includes(opt.id)}
+                      onChange={() => toggleHolidayCalendar(opt.id)}
+                      className="mt-0.5 size-4 shrink-0 rounded border-border bg-input text-accent shadow-sm focus:ring-2 focus:ring-accent/40"
+                    />
+                    <span className="text-sm text-muted-foreground leading-snug">{opt.label}</span>
+                  </label>
+                ))}
               </div>
             </CardContent>
           </Card>
@@ -1893,7 +1835,7 @@ export function ApplicationForm() {
               <CardTitle className="text-xl">Add dates and occasions</CardTitle>
               <CardDescription className="text-base leading-relaxed">
                 Enter the full date (birth or start year). Optional <strong className="text-foreground">Years</strong>{' '}
-                checkbox: show age in the PDF (e.g. birthday 1969-11-24 → <strong className="text-foreground">Amy (57)</strong>{' '}
+                checkbox: show age in the PDF (e.g. birthday 1969-11-15 → <strong className="text-foreground">Amy (57)</strong>{' '}
                 in November 2026). Personal dates are stored only inside the PDF you download — not on the server account.
               </CardDescription>
             </CardHeader>
@@ -1971,21 +1913,79 @@ export function ApplicationForm() {
               </Button>
             </CardContent>
           </Card>
+            </>
+            )}
 
-          {/* Submit Button */}
-          <div className="flex justify-end">
-            <Button
-              type="submit"
-              className={`min-w-[200px] text-lg ${isSubmitting ? 'min-h-14 h-auto py-2' : 'h-12'}`}
-              disabled={isSubmitting || isGeneratingFree}
-            >
-              {isSubmitting ? (
-                <ButtonBusyLabel status="Redirecting…" />
-              ) : (
-                'Pay & download PDF'
+            {wizardStep === 5 && (
+              <div className="space-y-8">
+                <div>
+                  <h2 className="text-2xl font-semibold mb-2">Review & checkout</h2>
+                  <p className="text-muted-foreground text-sm">Confirm your settings, then pay to download the PDF.</p>
+                </div>
+                <dl className="wizard-review-grid">
+                  <div className="wizard-review-item"><dt>Layout</dt><dd>{layoutLabel}</dd></div>
+                  <div className="wizard-review-item"><dt>Year</dt><dd>{year} · starts {startMonthName}</dd></div>
+                  <div className="wizard-review-item"><dt>Week</dt><dd>{weekStart === 'monday' ? 'Monday' : 'Sunday'}</dd></div>
+                  <div className="wizard-review-item"><dt>Photos</dt><dd>{photoCount} / {MONTH_SLOT_COUNT}</dd></div>
+                  <div className="wizard-review-item"><dt>Holidays</dt><dd>{holidayCalendars.length ? holidayCalendars.length + ' selected' : 'None'}</dd></div>
+                  <div className="wizard-review-item"><dt>Occasions</dt><dd>{eventCount}</dd></div>
+                </dl>
+
+          {requireAuth ? (
+            <Card className="p-5 border border-border/80">
+              <CardHeader className="p-0 pb-3">
+                <CardTitle className="text-lg">Save to your account</CardTitle>
+              <CardDescription className="text-sm leading-relaxed">
+                {user
+                  ? 'Saves design (fonts, layout, week start, Pictures folder path) — not personal dates or month photos. Add or load photos again before generating a PDF.'
+                  : 'Sign in or register to keep a template between years and open it from your account.'}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="p-0">
+              {saveInfo && (
+                <div className="mb-3 text-sm text-success">{saveInfo}</div>
               )}
-            </Button>
-          </div>
+              {saveErr && (
+                <div className="mb-3 text-sm text-red-300">{saveErr}</div>
+              )}
+              <div className="flex flex-col lg:flex-row gap-3 lg:items-end">
+                <div className="flex-1 space-y-2 min-w-0">
+                  <Label htmlFor="save-name" className="text-sm">
+                    Name
+                  </Label>
+                  <Input
+                    id="save-name"
+                    value={saveName}
+                    onChange={(e) => setSaveName(e.target.value)}
+                    placeholder="e.g. Family calendar"
+                    className="h-10"
+                    disabled={!!presetLoading}
+                  />
+                </div>
+                <Button
+                  type="button"
+                  onClick={handleSaveToAccount}
+                  disabled={savingPreset || !!presetLoading}
+                  className="h-10 shrink-0 px-3 text-sm"
+                >
+                  <Save className="size-3.5 mr-1.5" />
+                  {savingPreset
+                    ? 'Saving…'
+                    : editingPresetId
+                      ? 'Update in account'
+                      : 'Save to account'}
+                </Button>
+              </div>
+              </CardContent>
+            </Card>
+          ) : null}
+
+
+                <p className="text-xs text-muted">$2 printable PDF · personal dates only inside the downloaded file</p>
+              </div>
+            )}
+          </CalendarWizard>
+
         </form>
       </div>
     </div>
