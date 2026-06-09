@@ -1109,7 +1109,7 @@ export function ApplicationForm() {
     MONTHS[Math.min(11, Math.max(0, (parseInt(startMonth, 10) || 1) - 1))];
 
   return (
-    <div className="min-h-screen bg-background text-foreground py-12 px-6 sm:px-10 lg:px-16">
+    <div className="min-h-screen text-foreground py-12 px-6 sm:px-10 lg:px-16">
       {paymentSuccessModal != null && (
         <div
           className="fixed inset-0 z-[100] flex items-center justify-center bg-foreground/40 p-4"
@@ -1151,7 +1151,7 @@ export function ApplicationForm() {
           </Card>
         </div>
       )}
-      <div className="max-w-4xl mx-auto">
+      <div className="max-w-4xl mx-auto pt-[5lh]">
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-8">
           <div className="flex items-center gap-3 order-2 sm:order-1">
             {requireAuth ? (
@@ -1188,7 +1188,6 @@ export function ApplicationForm() {
         </div>
 
         <div className="text-center mb-12">
-          <h1 className="text-5xl lg:text-6xl font-semibold mb-4">Calendar Generator</h1>
           <p className="text-xl text-muted-foreground">Create your personalized calendar with photos and important dates</p>
           <p className="mt-3 text-sm text-muted max-w-2xl mx-auto leading-relaxed">
             For 2 dollars you will get a .pdf file you can print yourself. We are not collecting any of
@@ -1235,7 +1234,7 @@ export function ApplicationForm() {
                     <strong className="text-foreground">Returning user?</strong> Upload your previous calendar PDF to restore personal dates.
                   </p>
                 </div>
-                <Card className="border-accent/30 bg-surface/40">
+                <Card className="card-opaque border-accent/30">
                   <CardHeader className="pb-3">
                     <CardTitle className="text-lg flex items-center gap-2"><FileUp className="size-5 text-accent shrink-0" />Import previous PDF</CardTitle>
                     <CardDescription className="text-sm">Dates are stored inside the PDF only.</CardDescription>
@@ -1253,7 +1252,7 @@ export function ApplicationForm() {
 
             {wizardStep === 2 && (
             <>
-          <Card className="p-6 lg:p-8">
+          <Card className="card-opaque p-6 lg:p-8">
             <CardHeader className="p-0 pb-4">
               <CardTitle className="text-xl">PDF layout</CardTitle>
               <CardDescription className="text-base">
@@ -1266,7 +1265,7 @@ export function ApplicationForm() {
                   className={`flex cursor-pointer gap-4 rounded-xl border-2 p-4 transition-colors ${
                     layoutMode === 'portrait-single'
                       ? 'border-accent bg-accent/15 ring-1 ring-accent/40'
-                      : 'border-border hover:border-accent/30 bg-background'
+                      : 'border-border hover:border-accent/30 bg-input'
                   }`}
                 >
                   <input
@@ -1289,7 +1288,7 @@ export function ApplicationForm() {
                   className={`flex cursor-pointer gap-4 rounded-xl border-2 p-4 transition-colors ${
                     layoutMode === 'landscape-spread'
                       ? 'border-accent bg-accent/15 ring-1 ring-accent/40'
-                      : 'border-border hover:border-accent/30 bg-background'
+                      : 'border-border hover:border-accent/30 bg-input'
                   }`}
                 >
                   <input
@@ -1313,7 +1312,7 @@ export function ApplicationForm() {
           </Card>
 
           {/* Year & start month */}
-          <Card className="p-6 lg:p-8">
+          <Card className="card-opaque p-6 lg:p-8">
             <CardHeader className="p-0 pb-4">
               <CardTitle className="text-xl">Year &amp; first month</CardTitle>
               <CardDescription className="text-base">
@@ -1374,7 +1373,7 @@ export function ApplicationForm() {
             </CardContent>
           </Card>
 
-          <Card className="p-6 lg:p-8">
+          <Card className="card-opaque p-6 lg:p-8">
             <CardHeader className="p-0 pb-6">
               <CardTitle className="text-xl">Font settings</CardTitle>
               <CardDescription className="text-base">
@@ -1496,7 +1495,7 @@ export function ApplicationForm() {
                 </div>
 
                 <aside className="w-full max-w-[15.5rem] mx-auto lg:mx-0 lg:max-w-none shrink-0 lg:sticky lg:top-24">
-                  <div className="rounded-xl border border-border bg-background p-4 sm:p-5 shadow-inner space-y-5">
+                  <div className="rounded-xl border border-border bg-surface p-4 sm:p-5 shadow-inner space-y-5">
                     <div>
                       <p className="text-xs font-medium uppercase tracking-wide text-muted mb-2">
                         Year & month (PDF)
@@ -1587,7 +1586,7 @@ export function ApplicationForm() {
             {wizardStep === 3 && (
             <>
           {/* Months Section */}
-          <Card className="p-6 lg:p-8">
+          <Card className="card-opaque p-6 lg:p-8">
             <CardHeader className="p-0 pb-4">
               <CardTitle className="text-xl">Monthly Photos</CardTitle>
               <CardDescription className="text-base">
@@ -1794,7 +1793,7 @@ export function ApplicationForm() {
 
             {wizardStep === 4 && (
             <>
-          <Card className="p-6 lg:p-8">
+          <Card className="card-opaque p-6 lg:p-8">
             <CardHeader className="p-0 pb-4">
               <CardTitle className="text-xl">Holidays &amp; celebrations</CardTitle>
               <CardDescription className="text-base">
@@ -1830,7 +1829,7 @@ export function ApplicationForm() {
           </Card>
 
           {/* Events Section */}
-          <Card className="p-6 lg:p-8">
+          <Card className="card-opaque p-6 lg:p-8">
             <CardHeader className="p-0 pb-4">
               <CardTitle className="text-xl">Add dates and occasions</CardTitle>
               <CardDescription className="text-base leading-relaxed">

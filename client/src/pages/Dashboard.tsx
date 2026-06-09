@@ -72,14 +72,14 @@ export function Dashboard() {
 
   if (authLoading || (!token && loading)) {
     return (
-      <div className="min-h-screen bg-background text-foreground flex items-center justify-center">
+      <div className="min-h-screen text-foreground flex items-center justify-center">
         <p className="text-muted">Loading…</p>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background text-foreground py-12 px-6 sm:px-10">
+    <div className="min-h-screen text-foreground py-12 px-6 sm:px-10">
       <div className="max-w-[900px] mx-auto space-y-8">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>

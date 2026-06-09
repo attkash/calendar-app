@@ -1,7 +1,7 @@
 import * as React from "react"
 
 const cardBase =
-  "rounded-xl border border-border bg-surface text-foreground shadow-card"
+  "rounded-xl border border-border/80 glass-panel text-foreground shadow-card"
 
 const Card = React.forwardRef<
   HTMLDivElement,
