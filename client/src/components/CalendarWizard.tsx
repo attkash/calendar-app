@@ -12,6 +12,7 @@ type CalendarWizardProps = {
   isSubmitting: boolean;
   isGeneratingFree: boolean;
   onFreePdf: () => void;
+  onPay: () => void;
   children: ReactNode;
 };
 
@@ -24,6 +25,7 @@ export function CalendarWizard({
   isSubmitting,
   isGeneratingFree,
   onFreePdf,
+  onPay,
   children,
 }: CalendarWizardProps) {
   return (
@@ -47,6 +49,7 @@ export function CalendarWizard({
         isSubmitting={isSubmitting}
         isGeneratingFree={isGeneratingFree}
         onFreePdf={onFreePdf}
+        onPay={onPay}
       />
     </Card>
   );

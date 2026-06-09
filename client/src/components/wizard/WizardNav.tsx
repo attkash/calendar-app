@@ -10,6 +10,7 @@ type WizardNavProps = {
   isSubmitting?: boolean;
   isGeneratingFree?: boolean;
   onFreePdf?: () => void;
+  onPay?: () => void;
 };
 
 export function WizardNav({
@@ -21,6 +22,7 @@ export function WizardNav({
   isSubmitting = false,
   isGeneratingFree = false,
   onFreePdf,
+  onPay,
 }: WizardNavProps) {
   return (
     <div className="wizard-nav">
@@ -56,7 +58,8 @@ export function WizardNav({
         ) : null}
         {isLastStep ? (
           <Button
-            type="submit"
+            type="button"
+            onClick={onPay}
             className={`min-w-[11rem] ${isSubmitting ? 'min-h-14 h-auto py-2' : ''}`}
             disabled={isSubmitting || isGeneratingFree}
           >

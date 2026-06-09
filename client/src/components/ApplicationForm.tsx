@@ -1062,8 +1062,8 @@ export function ApplicationForm() {
     e.target.value = '';
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handlePayAndCheckout = async () => {
+    if (wizardStep !== WIZARD_STEP_COUNT) return;
     setError(null);
     setIsSubmitting(true);
 
@@ -1195,7 +1195,10 @@ export function ApplicationForm() {
           </p>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-8">
+        <form
+          onSubmit={(e) => e.preventDefault()}
+          className="space-y-8"
+        >
           {error && (
             <div
               ref={checkoutErrorRef}
@@ -1222,6 +1225,7 @@ export function ApplicationForm() {
             isSubmitting={isSubmitting}
             isGeneratingFree={isGeneratingFree}
             onFreePdf={() => void handleFreeGenerate()}
+            onPay={() => void handlePayAndCheckout()}
           >
             {wizardStep === 1 && (
               <div className="space-y-6">
