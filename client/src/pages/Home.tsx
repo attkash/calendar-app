@@ -10,7 +10,7 @@ export function Home() {
   return (
     <div className="min-h-screen text-foreground flex flex-col items-center justify-center px-6 py-16">
       <div className="max-w-lg w-full text-center space-y-8">
-        <div>
+        <div className="page-intro">
           <p className="text-muted-foreground text-lg">
             Build a personal calendar with photos and important dates. Sign in to reuse your settings next year.
           </p>

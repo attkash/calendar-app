@@ -1151,7 +1151,7 @@ export function ApplicationForm() {
           </Card>
         </div>
       )}
-      <div className="max-w-4xl mx-auto pt-[5lh]">
+      <div className="max-w-4xl mx-auto pt-[3lh] sm:pt-[5lh]">
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-8">
           <div className="flex items-center gap-3 order-2 sm:order-1">
             {requireAuth ? (
@@ -1187,7 +1187,7 @@ export function ApplicationForm() {
           ) : null}
         </div>
 
-        <div className="text-center mb-12">
+        <div className="text-center mb-12 page-intro">
           <p className="text-xl text-muted-foreground">Create your personalized calendar with photos and important dates</p>
           <p className="mt-3 text-sm text-muted max-w-2xl mx-auto leading-relaxed">
             For 2 dollars you will get a .pdf file you can print yourself. We are not collecting any of
@@ -1229,7 +1229,7 @@ export function ApplicationForm() {
           >
             {wizardStep === 1 && (
               <div className="space-y-6">
-                <div className="text-center space-y-3 py-2 sm:py-4">
+                <div className="text-center space-y-3 py-2 sm:py-4 wizard-step-intro">
                   <h2 className="text-2xl sm:text-3xl font-semibold">Getting started</h2>
                   <p className="text-muted-foreground leading-relaxed max-w-lg mx-auto">
                     <strong className="text-foreground">First time here?</strong> Click <strong className="text-foreground">Next</strong> to continue.
@@ -1921,7 +1921,7 @@ export function ApplicationForm() {
 
             {wizardStep === 5 && (
               <div className="space-y-8">
-                <div>
+                <div className="review-step-header">
                   <h2 className="text-2xl font-semibold mb-2">Review & checkout</h2>
                   <p className="text-muted-foreground text-sm">Confirm your settings, then pay to download the PDF.</p>
                 </div>
@@ -1935,7 +1935,7 @@ export function ApplicationForm() {
                 </dl>
 
           {requireAuth ? (
-            <Card className="p-5 border border-border/80">
+            <Card className="card-opaque p-5 border border-border/80">
               <CardHeader className="p-0 pb-3">
                 <CardTitle className="text-lg">Save to your account</CardTitle>
               <CardDescription className="text-sm leading-relaxed">

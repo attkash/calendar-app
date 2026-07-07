@@ -262,3 +262,89 @@
   margin: 0;
   color: var(--color-foreground);
 }
+
+/* Mobile: stronger contrast over photo background */
+@media (max-width: 639px) {
+  :root {
+    --color-muted: #374151;
+    --color-muted-foreground: #1f2937;
+  }
+
+  .glass-panel {
+    background-color: rgb(255 255 255 / 0.94);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    box-shadow: 0 4px 24px rgb(15 23 42 / 0.1);
+  }
+
+  .page-intro {
+    background: rgb(255 255 255 / 0.94);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    padding: 1rem 1.25rem;
+    border-radius: 0.75rem;
+    border: 1px solid rgb(203 213 225 / 0.9);
+    box-shadow: 0 4px 20px rgb(15 23 42 / 0.1);
+  }
+
+  .page-intro p {
+    color: #111827;
+  }
+
+  .wizard-step-intro {
+    background: rgb(255 255 255 / 0.95);
+    padding: 1rem 1.25rem;
+    border-radius: 0.75rem;
+    border: 1px solid rgb(203 213 225 / 0.85);
+  }
+
+  .wizard-step-intro p {
+    color: #1f2937;
+  }
+
+  .review-step-header {
+    background: rgb(255 255 255 / 0.95);
+    padding: 1rem 1.25rem;
+    border-radius: 0.75rem;
+    border: 1px solid rgb(203 213 225 / 0.85);
+  }
+
+  .review-step-header h2 {
+    color: #111827;
+  }
+
+  .review-step-header p {
+    color: #374151;
+  }
+
+  .wizard-steps__label {
+    color: #111827;
+    font-weight: 600;
+    background: rgb(255 255 255 / 0.9);
+    padding: 0.2rem 0.4rem;
+    border-radius: 0.25rem;
+    box-shadow: 0 1px 3px rgb(15 23 42 / 0.08);
+  }
+
+  .wizard-steps__button {
+    color: #374151;
+  }
+
+  .wizard-nav {
+    background: rgb(255 255 255 / 0.92);
+    margin-left: -1.5rem;
+    margin-right: -1.5rem;
+    margin-bottom: -1.5rem;
+    padding: 1.25rem 1.5rem 1.5rem;
+    border-top-color: rgb(203 213 225);
+  }
+
+  .wizard-review-item {
+    background: #ffffff;
+    border-color: rgb(203 213 225);
+  }
+
+  .wizard-review-item dt {
+    color: #4b5563;
+  }
+}
