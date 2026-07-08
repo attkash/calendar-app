@@ -265,6 +265,13 @@
 
 /* Mobile: stronger contrast over photo background */
 @media (max-width: 639px) {
+  body {
+    /* Tile background image vertically for full scroll length */
+    background-repeat: repeat-y;
+    background-size: 100% auto;
+    background-position: top center;
+  }
+
   :root {
     --color-muted: #374151;
     --color-muted-foreground: #1f2937;
